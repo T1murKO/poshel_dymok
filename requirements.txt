@@ -1,0 +1,5 @@
+seleniumbase
+requests
+opencv-python
+numpy
+2captcha-python
