@@ -18,7 +18,6 @@ from selenium.webdriver.common.action_chains import ActionChains
 import random
 import argparse
 
-
 parser = argparse.ArgumentParser(description="Script Configuration")
 
 # Boolean flags with default values
@@ -789,7 +788,7 @@ def close_all_popups(driver):
         pass
 
     try:
-        driver.find_element(By.XPATH, "//span[contains(text(), 'Something went wrong')]")
+        driver.find_element(By.XPATH, "//span[contains(text(), 'Something went wrong ')]")
         logging.debug('Something went wrong popup found, closing...')
         driver.find_element(By.XPATH, "//img[@alt='Close modal']").click()
     except:
@@ -805,11 +804,11 @@ def close_all_popups(driver):
     close_duel_end_popup(driver)
 
 
-def process_duel_request(enemy_position):
+def process_duel_request(position_left=True):
     logging.debug('Processing duel request')
     try_find_element("//button[contains(text(), 'Accept')]", "Accept first").click()
     logging.debug('Duel accepted')
-    sleep(14)
+    sleep(8)
     try:
         try_find_element("//span[contains(text(), 'Duel Request')]", "Accept duel popup")
         logging.debug('Duel is not started yet, declining...')
@@ -819,9 +818,23 @@ def process_duel_request(enemy_position):
         pass
     logging.debug('Duel started')
     sleep(6)
-    click_on_coordinates(driver, *enemy_position)
-    sleep(3)
-    click_on_coordinates(driver, *enemy_position)
+
+    try:
+        if position_left:
+            click_on_coordinates(driver, *enemy_position_left)
+            sleep(1)
+            click_on_coordinates(driver, *enemy_position_left2)
+            sleep(1)
+            click_on_coordinates(driver, *enemy_position_left3)
+        else:
+            click_on_coordinates(driver, *enemy_position_right)
+            sleep(1)
+            click_on_coordinates(driver, *enemy_position_right2)
+            sleep(1)
+            click_on_coordinates(driver, *enemy_position_right3)
+    except:
+        pass
+
     logging.debug('Waiting for duel to finish...')
     try_wait_for_element("//button[contains(text(), 'Close')]", "Close duel", wait_duel_close)
     close_duel_end_popup(driver)
@@ -878,14 +891,8 @@ def close_duel_end_popup(driver):
     global coins_farmed, duels
     try:
         driver.find_element(By.XPATH, "//span[contains(text(), 'Duel Reward')]")
-        try:
-            driver.find_element(By.XPATH, "//span[contains(text(), '75')]")
-            coins_farmed += 75
-        except:
-            coins_farmed += 30
-
         duels += 1
-        logging.info(f'Duels: {duels}, Coins farmed: {coins_farmed}')
+        logging.info(f'Duels: {duels}')
         try_wait_for_element("//button[contains(text(), 'Close')]", "Close duel end popup", wait).click()
         sleep(4)
     except Exception as e:
@@ -906,13 +913,17 @@ def clear_browser_cache():
     })
 
 
+def reload_page(driver):
+    driver.refresh()
+    wait_long.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Enter World')]"))).click()
+    solve_captcha_if_required(driver)
+
+
 def reload_page_if_bugged(driver):
     try:
         driver.find_element(By.XPATH,
                             "//span[contains(text(), 'You are already in duel request screen with someone else.')]")
-        driver.refresh()
-        sleep(10)
-        wait_long.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Enter World')]"))).click()
+        reload_page(driver)
     except:
         pass
 
@@ -970,71 +981,71 @@ def complete_tutorial():
     wait_long.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Got it!')]"))).click()
 
 
-driver = Driver(extension_zip='./MetaMask.zip',
-                headless2=CONSOLE_MODE,
-                agent=user_agent,
-                chromium_arg='--mute-audio',
-                enable_3d_apis=True,
-                proxy=args.proxy)
-
-driver.maximize_window()
-driver.get('https://google.com')
-
-metamask_auto = MetaMaskAuto(driver,
-                             password='11111111',
-                             recovery_phrase='whip squirrel shine cabin access spell arrow review spread code fire marine')
-
-metamask_auto.add_account(args.private_key)
-metamask_auto.add_network('Blast', 'https://rpc.blast.io', '81457', 'ETH', 'https://blastscan.io')
-wait_fast = WebDriverWait(driver, 3, 1)
-wait = WebDriverWait(driver, 20, 1)
-wait_long = WebDriverWait(driver, 60, 1)
-wait_ultra_long = WebDriverWait(driver, 180, 1)
-driver.switch_to.window(driver.window_handles[0])
-metamask_auto.driver.get('https://play.cambria.gg/')
-wait_long.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Connect Wallet')]"))).click()
-wait_fast.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'MetaMask')]"))).click()
-logging.debug('Connecting wallet...')
-metamask_auto.connect()
-metamask_auto.confirm()
-logging.debug('Connected wallet')
-wait_long.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "button[aria-disabled='false']"))).click()
-logging.debug('Clicked')
-metamask_auto.confirm()
-wait_long.until(EC.element_to_be_clickable((By.XPATH, "//span[contains(text(), 'Play')]"))).click()
-wait_long.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Connect Wallet')]"))).click()
-wait_fast.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'MetaMask')]"))).click()
-metamask_auto.connect()
-wait_long.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Enter World')]"))).click()
-wait_ultra_long.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Reconnect')]")))
-solve_captcha_if_required(driver)
-complete_tutorial()
-
-# def open_profile(profile_id):
-#     resp = requests.get(profile_open_endpoint, params={'serial_number': profile_id}).json()
-#     if resp["code"] != 0:
-#         raise Exception(resp["msg"])
+# driver = Driver(extension_zip='./MetaMask.zip',
+#                 headless2=CONSOLE_MODE,
+#                 agent=user_agent,
+#                 chromium_arg='--mute-audio',
+#                 enable_3d_apis=True,
+#                 proxy=args.proxy)
 #
-#     chrome_driver = resp["data"]["webdriver"]
-#     debugger_address = resp["data"]["ws"]["selenium"]
-#     return chrome_driver, debugger_address
+# driver.maximize_window()
+# driver.get('https://google.com')
 #
+# metamask_auto = MetaMaskAuto(driver,
+#                              password='11111111',
+#                              recovery_phrase='whip squirrel shine cabin access spell arrow review spread code fire marine')
 #
-# def _setup_driver(chrome_driver, debugger_address):
-#     options = Options()
-#     options.add_experimental_option("debuggerAddress", debugger_address)
-#     s = Service(chrome_driver)
-#     driver = webdriver.Chrome(service=s, options=options)
-#     return driver
-#
-#
-# chrome_driver, debugger_address = open_profile(46)
-# driver = _setup_driver(chrome_driver, debugger_address)
+# metamask_auto.add_account(args.private_key)
+# metamask_auto.add_network('Blast', 'https://rpc.blast.io', '81457', 'ETH', 'https://blastscan.io')
 # wait_fast = WebDriverWait(driver, 3, 1)
 # wait = WebDriverWait(driver, 20, 1)
-# wait_long = WebDriverWait(driver, 40, 1)
+# wait_long = WebDriverWait(driver, 60, 1)
+# wait_ultra_long = WebDriverWait(driver, 180, 1)
 # driver.switch_to.window(driver.window_handles[0])
-# driver.maximize_window()
+# metamask_auto.driver.get('https://play.cambria.gg/')
+# wait_long.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Connect Wallet')]"))).click()
+# wait_fast.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'MetaMask')]"))).click()
+# logging.debug('Connecting wallet...')
+# metamask_auto.connect()
+# metamask_auto.confirm()
+# logging.debug('Connected wallet')
+# wait_long.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "button[aria-disabled='false']"))).click()
+# logging.debug('Clicked')
+# metamask_auto.confirm()
+# wait_long.until(EC.element_to_be_clickable((By.XPATH, "//span[contains(text(), 'Play')]"))).click()
+# wait_long.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Connect Wallet')]"))).click()
+# wait_fast.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'MetaMask')]"))).click()
+# metamask_auto.connect()
+# wait_long.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Enter World')]"))).click()
+# wait_ultra_long.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Reconnect')]")))
+# solve_captcha_if_required(driver)
+# complete_tutorial()
+
+def open_profile(profile_id):
+    resp = requests.get(profile_open_endpoint, params={'serial_number': profile_id}).json()
+    if resp["code"] != 0:
+        raise Exception(resp["msg"])
+
+    chrome_driver = resp["data"]["webdriver"]
+    debugger_address = resp["data"]["ws"]["selenium"]
+    return chrome_driver, debugger_address
+
+
+def _setup_driver(chrome_driver, debugger_address):
+    options = Options()
+    options.add_experimental_option("debuggerAddress", debugger_address)
+    s = Service(chrome_driver)
+    driver = webdriver.Chrome(service=s, options=options)
+    return driver
+
+
+chrome_driver, debugger_address = open_profile(46)
+driver = _setup_driver(chrome_driver, debugger_address)
+wait_fast = WebDriverWait(driver, 3, 1)
+wait = WebDriverWait(driver, 20, 1)
+wait_long = WebDriverWait(driver, 40, 1)
+driver.switch_to.window(driver.window_handles[0])
+driver.maximize_window()
 
 action = ActionChains(driver)
 wait_second_accept = WebDriverWait(driver, 10, 1)
@@ -1045,8 +1056,13 @@ tab_h = window_size['height'] * 0.9
 
 tab_center_x = tab_w // 2
 tab_center_y = tab_h // 2
-enemy_position_left = (round(tab_w // 2 - (tab_w * 0.04)), tab_h // 2)
-enemy_position_right = (round(tab_w // 2 + (tab_w * 0.04)), tab_h // 2)
+enemy_position_left = (round(tab_w // 2 - (tab_w * 0.03)), tab_h // 2)
+enemy_position_right = (round(tab_w // 2 + (tab_w * 0.03)), tab_h // 2)
+enemy_position_left2 = (round(tab_w // 2 - (tab_w * 0.04)), tab_h // 2)
+enemy_position_right2 = (round(tab_w // 2 + (tab_w * 0.04)), tab_h // 2)
+enemy_position_left3 = (round(tab_w // 2 - (tab_w * 0.05)), tab_h // 2)
+enemy_position_right3 = (round(tab_w // 2 + (tab_w * 0.05)), tab_h // 2)
+
 
 img_raw = driver.get_screenshot_as_png()
 img_bytes = np.frombuffer(img_raw, np.uint8)
@@ -1079,37 +1095,39 @@ coins_farmed = 0
 
 logging.info('Setup done, starting duels abuse')
 tick = 0
-tick_rate = 5
+tick_rate = 2
 arena_position_x = 7400
 arena_position_y = 5360
+tick_reload_interval = 3600
 
 while True:
     try:
-        reload_page_if_bugged(driver)
+        tick += 1
+
+        if tick % tick_reload_interval == 0:
+            reload_page(driver)
+        else:
+            reload_page_if_bugged(driver)
+
         solve_captcha_if_required(driver)
         close_all_popups(driver)
-        display_chat(driver)
+        # display_chat(driver)
         recursive_step_to_arena(driver)
-
         if tick % tick_rate == 0:
             request_duel(driver)
-            tick = 0
 
-        tick += 1
         try:
-            try_find_element("//span[contains(text(), 'Duel Request')]", "Accept duel popup")
+            driver.find_element(By.XPATH, "//span[contains(text(), 'Duel Request')]")
             logging.debug('Outcoming Duel request accepted')
-            sleep(2.75)
-            process_duel_request(enemy_position_left)
+            process_duel_request(position_left=True)
         except:
             pass
 
-        try_find_element("//button[contains(text(), 'Accept')]", "Accept first").click()
+        driver.find_element(By.XPATH, "//button[contains(text(), 'Accept')]").click()
         logging.debug('Incoming duel request accepted')
-        try_wait_for_element("//span[contains(text(), 'Duel Request')]", "Accept second", wait_second_accept)
+        wait_second_accept.until(EC.element_to_be_clickable((By.XPATH, "//span[contains(text(), 'Duel Request')]")))
         logging.debug('Incoming Duel request accepted')
-        sleep(2.75)
-        process_duel_request(enemy_position_right)
+        process_duel_request(position_left=False)
     except Exception as e:
         pass
     finally:
