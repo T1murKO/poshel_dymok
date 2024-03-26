@@ -770,6 +770,7 @@ def close_all_popups(driver):
         driver.find_element(By.XPATH, "//span[contains(text(), 'Duel History')]")
         logging.debug('Duel History popup found, closing...')
         driver.find_element(By.XPATH, "//img[@alt='Close modal']").click()
+        return
     except:
         pass
 
@@ -777,6 +778,7 @@ def close_all_popups(driver):
         driver.find_element(By.XPATH, "//span[contains(text(), 'Leaderboard')]")
         logging.debug('Leaderboard popup found, closing...')
         driver.find_element(By.XPATH, "//img[@alt='Close modal']").click()
+        return
     except:
         pass
 
@@ -784,13 +786,15 @@ def close_all_popups(driver):
         driver.find_element(By.XPATH, "//span[contains(text(), 'Matchmaking Lobby')]")
         logging.debug('Matchmaking Lobby popup found, closing...')
         driver.find_element(By.XPATH, "//img[@alt='Close modal']").click()
+        return
     except:
         pass
 
     try:
-        driver.find_element(By.XPATH, "//span[contains(text(), 'Something went wrong ')]")
+        driver.find_element(By.XPATH, "//span[contains(text(), 'Something went wrong')]")
         logging.debug('Something went wrong popup found, closing...')
         driver.find_element(By.XPATH, "//img[@alt='Close modal']").click()
+        return
     except:
         pass
 
@@ -820,20 +824,20 @@ def process_duel_request(position_left=True):
     sleep(6)
 
     try:
-        if position_left:
-            click_on_coordinates(driver, *enemy_position_left)
-            sleep(1)
-            click_on_coordinates(driver, *enemy_position_left2)
-            sleep(1)
-            click_on_coordinates(driver, *enemy_position_left3)
-        else:
-            click_on_coordinates(driver, *enemy_position_right)
-            sleep(1)
-            click_on_coordinates(driver, *enemy_position_right2)
-            sleep(1)
-            click_on_coordinates(driver, *enemy_position_right3)
+        click_on_coordinates(driver, *enemy_position_left2)
+        sleep(0.5)
+        click_on_coordinates(driver, *enemy_position_right2)
+        sleep(0.5)
+        click_on_coordinates(driver, *enemy_position_left)
+        sleep(0.5)
+        click_on_coordinates(driver, *enemy_position_right)
+        sleep(0.5)
+        click_on_coordinates(driver, *enemy_position_left3)
+        sleep(0.5)
+        click_on_coordinates(driver, *enemy_position_right3)
     except:
         pass
+    clear_chat(driver)
 
     logging.debug('Waiting for duel to finish...')
     try_wait_for_element("//button[contains(text(), 'Close')]", "Close duel", wait_duel_close)
@@ -920,10 +924,15 @@ def reload_page(driver):
 
 
 def reload_page_if_bugged(driver):
+    bug_texts = ['walk with a duel request screen open, please click the decline button or refresh the game.',
+                 'You are already in a duel request screen with someone else.']
     try:
-        driver.find_element(By.XPATH,
-                            "//span[contains(text(), 'You are already in duel request screen with someone else.')]")
-        reload_page(driver)
+        if any([is_element_visible(driver, f"//span[contains(text(), '{text}')]") for text in bug_texts]):
+            clear_chat(driver)
+            sleep(10)
+            if any([is_element_visible(driver, f"//span[contains(text(), '{text}')]") for text in bug_texts]):
+                logging.debug('Page is bugged, reloading...')
+                reload_page(driver)
     except:
         pass
 
@@ -969,6 +978,48 @@ def recursive_step_to_arena(driver, step_size_from=0, step_size_to=570):
 
     recursive_step_to_arena(driver)
 
+
+def clear_chat(driver):
+    script = """
+    var chatContainer = document.querySelector('.messages-list.h-full.overflow-y-auto.p-2');
+    if (chatContainer) {
+        // Select all child elements of the chat container
+        var children = Array.from(chatContainer.children);
+        // Keep the first element (assumed to be the welcome message) and remove all others
+        for (var i = 1; i < children.length; i++) {
+            chatContainer.removeChild(children[i]);
+        }
+    }
+    """
+
+    # Execute the JavaScript with Selenium
+    driver.execute_script(script)
+
+
+def remove_all_xpath_elements(driver, xpath):
+    script = f"""
+    var elements = document.evaluate("{xpath}", document, null, XPathResult.ORDERED_NODE_SNAPSHOT_TYPE, null);
+    for (var i = 0; i < elements.snapshotLength; i++) {{
+      var element = elements.snapshotItem(i);
+      if (element) {{
+        element.remove();
+      }}
+    }}
+    """
+
+    # Execute the JavaScript with Selenium
+    driver.execute_script(script)
+
+def remove_first_xpath_element(driver, xpath):
+    script = f"""
+    var element = document.evaluate("{xpath}", document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+    if (element) {{
+      element.remove();
+    }}
+    """
+
+    # Execute the JavaScript with Selenium
+    driver.execute_script(script)
 
 def complete_tutorial():
     try:
@@ -1063,7 +1114,6 @@ enemy_position_right2 = (round(tab_w // 2 + (tab_w * 0.04)), tab_h // 2)
 enemy_position_left3 = (round(tab_w // 2 - (tab_w * 0.05)), tab_h // 2)
 enemy_position_right3 = (round(tab_w // 2 + (tab_w * 0.05)), tab_h // 2)
 
-
 img_raw = driver.get_screenshot_as_png()
 img_bytes = np.frombuffer(img_raw, np.uint8)
 img = cv2.cvtColor(cv2.imdecode(img_bytes, cv2.IMREAD_COLOR), cv2.COLOR_BGR2RGB)
@@ -1098,14 +1148,18 @@ tick = 0
 tick_rate = 2
 arena_position_x = 7400
 arena_position_y = 5360
-tick_reload_interval = 3600
+tick_reload_interval = 7200
+tick_chat_clear_interval = 100
 
 while True:
     try:
         tick += 1
+        if tick % tick_chat_clear_interval == 0:
+            clear_chat(driver)
 
         if tick % tick_reload_interval == 0:
             reload_page(driver)
+            tick = 0
         else:
             reload_page_if_bugged(driver)
 
@@ -1113,21 +1167,19 @@ while True:
         close_all_popups(driver)
         # display_chat(driver)
         recursive_step_to_arena(driver)
+
         if tick % tick_rate == 0:
             request_duel(driver)
 
         try:
             driver.find_element(By.XPATH, "//span[contains(text(), 'Duel Request')]")
-            logging.debug('Outcoming Duel request accepted')
-            process_duel_request(position_left=True)
+            logging.debug('Duel request accepted')
+            process_duel_request()
         except:
             pass
 
         driver.find_element(By.XPATH, "//button[contains(text(), 'Accept')]").click()
-        logging.debug('Incoming duel request accepted')
-        wait_second_accept.until(EC.element_to_be_clickable((By.XPATH, "//span[contains(text(), 'Duel Request')]")))
-        logging.debug('Incoming Duel request accepted')
-        process_duel_request(position_left=False)
+        remove_first_xpath_element("//button[contains(text(), 'Accept')]")
     except Exception as e:
         pass
     finally:
