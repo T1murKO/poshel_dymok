@@ -981,71 +981,71 @@ def complete_tutorial():
     wait_long.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Got it!')]"))).click()
 
 
-# driver = Driver(extension_zip='./MetaMask.zip',
-#                 headless2=CONSOLE_MODE,
-#                 agent=user_agent,
-#                 chromium_arg='--mute-audio',
-#                 enable_3d_apis=True,
-#                 proxy=args.proxy)
-#
-# driver.maximize_window()
-# driver.get('https://google.com')
-#
-# metamask_auto = MetaMaskAuto(driver,
-#                              password='11111111',
-#                              recovery_phrase='whip squirrel shine cabin access spell arrow review spread code fire marine')
-#
-# metamask_auto.add_account(args.private_key)
-# metamask_auto.add_network('Blast', 'https://rpc.blast.io', '81457', 'ETH', 'https://blastscan.io')
-# wait_fast = WebDriverWait(driver, 3, 1)
-# wait = WebDriverWait(driver, 20, 1)
-# wait_long = WebDriverWait(driver, 60, 1)
-# wait_ultra_long = WebDriverWait(driver, 180, 1)
-# driver.switch_to.window(driver.window_handles[0])
-# metamask_auto.driver.get('https://play.cambria.gg/')
-# wait_long.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Connect Wallet')]"))).click()
-# wait_fast.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'MetaMask')]"))).click()
-# logging.debug('Connecting wallet...')
-# metamask_auto.connect()
-# metamask_auto.confirm()
-# logging.debug('Connected wallet')
-# wait_long.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "button[aria-disabled='false']"))).click()
-# logging.debug('Clicked')
-# metamask_auto.confirm()
-# wait_long.until(EC.element_to_be_clickable((By.XPATH, "//span[contains(text(), 'Play')]"))).click()
-# wait_long.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Connect Wallet')]"))).click()
-# wait_fast.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'MetaMask')]"))).click()
-# metamask_auto.connect()
-# wait_long.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Enter World')]"))).click()
-# wait_ultra_long.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Reconnect')]")))
-# solve_captcha_if_required(driver)
-# complete_tutorial()
+driver = Driver(extension_zip='./MetaMask.zip',
+                headless2=CONSOLE_MODE,
+                agent=user_agent,
+                chromium_arg='--mute-audio',
+                enable_3d_apis=True,
+                proxy=args.proxy)
 
-def open_profile(profile_id):
-    resp = requests.get(profile_open_endpoint, params={'serial_number': profile_id}).json()
-    if resp["code"] != 0:
-        raise Exception(resp["msg"])
+driver.maximize_window()
+driver.get('https://google.com')
 
-    chrome_driver = resp["data"]["webdriver"]
-    debugger_address = resp["data"]["ws"]["selenium"]
-    return chrome_driver, debugger_address
+metamask_auto = MetaMaskAuto(driver,
+                             password='11111111',
+                             recovery_phrase='whip squirrel shine cabin access spell arrow review spread code fire marine')
 
-
-def _setup_driver(chrome_driver, debugger_address):
-    options = Options()
-    options.add_experimental_option("debuggerAddress", debugger_address)
-    s = Service(chrome_driver)
-    driver = webdriver.Chrome(service=s, options=options)
-    return driver
-
-
-chrome_driver, debugger_address = open_profile(46)
-driver = _setup_driver(chrome_driver, debugger_address)
+metamask_auto.add_account(args.private_key)
+metamask_auto.add_network('Blast', 'https://rpc.blast.io', '81457', 'ETH', 'https://blastscan.io')
 wait_fast = WebDriverWait(driver, 3, 1)
 wait = WebDriverWait(driver, 20, 1)
-wait_long = WebDriverWait(driver, 40, 1)
+wait_long = WebDriverWait(driver, 60, 1)
+wait_ultra_long = WebDriverWait(driver, 180, 1)
 driver.switch_to.window(driver.window_handles[0])
-driver.maximize_window()
+metamask_auto.driver.get('https://play.cambria.gg/')
+wait_long.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Connect Wallet')]"))).click()
+wait_fast.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'MetaMask')]"))).click()
+logging.debug('Connecting wallet...')
+metamask_auto.connect()
+metamask_auto.confirm()
+logging.debug('Connected wallet')
+wait_long.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "button[aria-disabled='false']"))).click()
+logging.debug('Clicked')
+metamask_auto.confirm()
+wait_long.until(EC.element_to_be_clickable((By.XPATH, "//span[contains(text(), 'Play')]"))).click()
+wait_long.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Connect Wallet')]"))).click()
+wait_fast.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'MetaMask')]"))).click()
+metamask_auto.connect()
+wait_long.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Enter World')]"))).click()
+wait_ultra_long.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Reconnect')]")))
+solve_captcha_if_required(driver)
+complete_tutorial()
+
+# def open_profile(profile_id):
+#     resp = requests.get(profile_open_endpoint, params={'serial_number': profile_id}).json()
+#     if resp["code"] != 0:
+#         raise Exception(resp["msg"])
+#
+#     chrome_driver = resp["data"]["webdriver"]
+#     debugger_address = resp["data"]["ws"]["selenium"]
+#     return chrome_driver, debugger_address
+#
+#
+# def _setup_driver(chrome_driver, debugger_address):
+#     options = Options()
+#     options.add_experimental_option("debuggerAddress", debugger_address)
+#     s = Service(chrome_driver)
+#     driver = webdriver.Chrome(service=s, options=options)
+#     return driver
+#
+#
+# chrome_driver, debugger_address = open_profile(46)
+# driver = _setup_driver(chrome_driver, debugger_address)
+# wait_fast = WebDriverWait(driver, 3, 1)
+# wait = WebDriverWait(driver, 20, 1)
+# wait_long = WebDriverWait(driver, 40, 1)
+# driver.switch_to.window(driver.window_handles[0])
+# driver.maximize_window()
 
 action = ActionChains(driver)
 wait_second_accept = WebDriverWait(driver, 10, 1)
