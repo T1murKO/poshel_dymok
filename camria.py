@@ -28,6 +28,7 @@ parser.add_argument("--console-mode", action="store_true", help="Run in console 
 # String arguments, required
 parser.add_argument("--proxy", type=str, required=True, help="Proxy configuration in the format login:pass@host:port")
 parser.add_argument("--private-key", type=str, required=True, help="Path to the private key file")
+parser.add_argument("--api-key", type=str, required=True, help="API key to rucapcha")
 
 # Set defaults for the boolean argument0s
 parser.set_defaults(save_image=False, debug=False, console_mode=False)
@@ -37,6 +38,7 @@ args = parser.parse_args()
 SAVE_IMAGE = args.save_image
 DEBUG = args.debug
 CONSOLE_MODE = args.console_mode
+api_key = args.api_key
 
 user_agent = ('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 '
               'Safari/537.36')
@@ -863,7 +865,7 @@ def handle_captcha_failure(func):
 def solve_capcha(driver):
     recaptcha_v2_element = driver.find_element(By.XPATH, "//div[@id='recaptcha-v2' and @class='g-recaptcha']")
     sitekey = recaptcha_v2_element.get_attribute('data-sitekey')
-    solver = TwoCaptcha('7e88afaf73f9fead475413140aaaaabd')
+    solver = TwoCaptcha(api_key)
     result = solver.recaptcha(
         sitekey=sitekey,
         url='https://play.cambria.gg/',
