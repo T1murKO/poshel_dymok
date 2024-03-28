@@ -24,6 +24,7 @@ parser = argparse.ArgumentParser(description="Script Configuration")
 parser.add_argument("--save-image", action="store_true", help="Enable saving images for debugging. Default is False.")
 parser.add_argument("--debug", action="store_true", help="Enable debug logging. Default is True.")
 parser.add_argument("--console-mode", action="store_true", help="Run in console mode. Default is False.")
+parser.add_argument("--passive", action="store_true", help="Run in console mode. Default is False.")
 
 # String arguments, required
 parser.add_argument("--proxy", type=str, required=True, help="Proxy configuration in the format login:pass@host:port")
@@ -31,7 +32,7 @@ parser.add_argument("--private-key", type=str, required=True, help="Path to the 
 parser.add_argument("--api-key", type=str, required=True, help="API key to rucapcha")
 
 # Set defaults for the boolean argument0s
-parser.set_defaults(save_image=False, debug=False, console_mode=False)
+parser.set_defaults(save_image=False, debug=False, console_mode=False, passive=False)
 
 args = parser.parse_args()
 
@@ -923,6 +924,8 @@ def reload_page(driver):
     driver.refresh()
     wait_long.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Enter World')]"))).click()
     solve_captcha_if_required(driver)
+    sleep(5)
+    clean_up_interface(driver)
 
 
 def reload_page_if_bugged(driver):
@@ -939,11 +942,16 @@ def reload_page_if_bugged(driver):
         pass
 
 
-def recursive_step_to_arena(driver, step_size_from=0, step_size_to=570):
+def get_distance_to_arena(driver):
     x_position_on_map = int(driver.find_element(By.XPATH, "//span[contains(text(), 'X:')]").text[3:])
     y_position_on_map = int(driver.find_element(By.XPATH, "//span[contains(text(), 'Y:')]").text[3:])
     distance_to_arena = np.linalg.norm([x_position_on_map - arena_position_x, y_position_on_map - arena_position_y],
                                        ord=2)
+    return distance_to_arena, x_position_on_map, y_position_on_map
+
+
+def recursive_step_to_arena(driver, step_size_from=0, step_size_to=570):
+    distance_to_arena, x_position_on_map, y_position_on_map = get_distance_to_arena(driver)
 
     if distance_to_arena <= 350:
         return
@@ -1012,6 +1020,7 @@ def remove_all_xpath_elements(driver, xpath):
     # Execute the JavaScript with Selenium
     driver.execute_script(script)
 
+
 def remove_first_xpath_element(driver, xpath):
     script = f"""
     var element = document.evaluate("{xpath}", document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
@@ -1022,6 +1031,7 @@ def remove_first_xpath_element(driver, xpath):
 
     # Execute the JavaScript with Selenium
     driver.execute_script(script)
+
 
 def complete_tutorial():
     try:
@@ -1034,6 +1044,25 @@ def complete_tutorial():
     wait_long.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Got it!')]"))).click()
 
 
+def clean_up_interface(driver):
+    remove_first_xpath_element(driver, "//div[contains(@class, 'minimap-subcontainer')]")
+    remove_first_xpath_element(driver, "//div[contains(@class, 'toolbar-buttons')]")
+    remove_first_xpath_element(driver, "//div[contains(@class, 'excalibur-container')]")
+    remove_first_xpath_element(driver, "//div[contains(@class, 'modifiers-container')]")
+    remove_first_xpath_element(driver, "//div[contains(@class, 'announcement-message-container')]")
+    remove_first_xpath_element(driver, "//div[contains(@class, 'navigation-bar')]")
+    remove_first_xpath_element(driver, "//section[@id='main-wip-disclaimer']")
+    remove_all_xpath_elements(driver, "//div[contains(@class, 'confetti-holder')]")
+    remove_all_xpath_elements(driver, "//div[contains(@class, 'scrolling-text')]")
+    remove_all_xpath_elements(driver, "//div[contains(@class, 'relative left')]")
+    remove_all_xpath_elements(driver, "//div[contains(@class, 'combat-ui-container')]")
+    remove_all_xpath_elements(driver, "//div[contains(@class, 'tab-switcher-container')]")
+    remove_all_xpath_elements(driver, "//div[contains(@class, 'navigation-content')]")
+    remove_all_xpath_elements(driver, "//button[contains(@class, 'new-btn')]")
+    remove_first_xpath_element(driver, "//div[@id='game']//div[contains(@style, 'display: block;')]")
+    remove_all_xpath_elements(driver, "//aside[@id='main-layout-left-aside']")
+
+print(args.passive)
 driver = Driver(extension_zip='./MetaMask.zip',
                 headless2=CONSOLE_MODE,
                 agent=user_agent,
@@ -1153,36 +1182,83 @@ arena_position_y = 5360
 tick_reload_interval = 7200
 tick_chat_clear_interval = 100
 
-while True:
-    try:
-        tick += 1
-        if tick % tick_chat_clear_interval == 0:
-            clear_chat(driver)
+clean_up_interface(driver)
 
-        if tick % tick_reload_interval == 0:
-            reload_page(driver)
-            tick = 0
-        else:
-            reload_page_if_bugged(driver)
 
-        solve_captcha_if_required(driver)
-        close_all_popups(driver)
-        # display_chat(driver)
-        recursive_step_to_arena(driver)
-
-        if tick % tick_rate == 0:
-            request_duel(driver)
-
+def active():
+    global tick
+    while True:
         try:
-            driver.find_element(By.XPATH, "//span[contains(text(), 'Duel Request')]")
-            logging.debug('Duel request accepted')
-            process_duel_request()
-        except:
-            pass
+            tick += 1
+            if tick % tick_chat_clear_interval == 0:
+                clear_chat(driver)
 
-        driver.find_element(By.XPATH, "//button[contains(text(), 'Accept')]").click()
-        remove_first_xpath_element("//button[contains(text(), 'Accept')]")
-    except Exception as e:
-        pass
-    finally:
-        sleep(0.5)
+            if tick % tick_reload_interval == 0:
+                reload_page(driver)
+                tick = 0
+            else:
+                reload_page_if_bugged(driver)
+
+            solve_captcha_if_required(driver)
+            close_all_popups(driver)
+            # display_chat(driver)
+            recursive_step_to_arena(driver)
+
+            if tick % tick_rate == 0:
+                request_duel(driver)
+
+            try:
+                driver.find_element(By.XPATH, "//span[contains(text(), 'Duel Request')]")
+                logging.debug('Duel request accepted')
+                process_duel_request()
+            except:
+                pass
+
+            driver.find_element(By.XPATH, "//button[contains(text(), 'Accept')]").click()
+            remove_first_xpath_element(driver, "//button[contains(text(), 'Accept')]")
+        except Exception as e:
+            pass
+        finally:
+            sleep(0.5)
+
+
+def passive():
+    global tick
+    remove_first_xpath_element(driver, "//canvas")
+    while True:
+        try:
+            tick += 1
+            if tick % tick_chat_clear_interval == 0:
+                clear_chat(driver)
+
+            if tick % tick_reload_interval == 0:
+                reload_page(driver)
+                tick = 0
+            else:
+                reload_page_if_bugged(driver)
+
+            solve_captcha_if_required(driver)
+            close_all_popups(driver)
+            distance_to_arena, _, _ = get_distance_to_arena(driver)
+            if distance_to_arena > 350:
+                reload_page(driver)
+                recursive_step_to_arena(driver)
+                remove_first_xpath_element(driver, "//canvas")
+            try:
+                driver.find_element(By.XPATH, "//span[contains(text(), 'Duel Request')]")
+                logging.debug('Duel request accepted')
+                process_duel_request()
+            except:
+                pass
+            driver.find_element(By.XPATH, "//button[contains(text(), 'Accept')]").click()
+            remove_first_xpath_element("//button[contains(text(), 'Accept')]")
+        except Exception as e:
+            pass
+        finally:
+            sleep(2)
+
+
+if args.passive:
+    passive()
+else:
+    active()
