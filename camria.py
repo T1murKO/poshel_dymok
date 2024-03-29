@@ -584,7 +584,7 @@ def is_element_visible(driver, xpath):
     try:
         element = driver.find_element(By.XPATH, xpath)
         return True if element.is_displayed() else False
-    except Exception as e:
+    except Exception:
         return False
 
 
@@ -621,8 +621,8 @@ def time_tracker(func):
     return wrapper
 
 
-def is_point_on_interface(x, y):
-    return any([x0 <= x <= x1 and y0 <= y <= y1 for (x0, y0), (x1, y1) in interface_regions_relative])
+# def is_point_on_interface(x, y):
+#     return any([x0 <= x <= x1 and y0 <= y <= y1 for (x0, y0), (x1, y1) in interface_regions_relative])
 
 
 # @time_tracker
@@ -631,7 +631,6 @@ def request_duel(driver):
     img = cv2.cvtColor(cv2.imdecode(np.frombuffer(driver.get_screenshot_as_png(), np.uint8), cv2.IMREAD_COLOR),
                        cv2.COLOR_BGR2RGB)
 
-    # img[interface_mask == 0] = [0, 0, 0]
     mask = np.all(img >= lower_pixel_border, axis=-1) & np.all(img <= upper_pixel_border, axis=-1)
     img_dilation = cv2.dilate(mask.astype(np.uint8) * 255, detection_kernel, iterations=3)
     contours, _ = cv2.findContours(img_dilation, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
@@ -646,24 +645,26 @@ def request_duel(driver):
 
     # Calculate contour centers
     x_cords = valid_rects[:, 0] + valid_rects[:, 2] // 2
-    y_cords = np.where(valid_rects[:, 3] > valid_rects[:, 2], valid_rects[:, 1] + valid_rects[:, 3] // 2,
-                       valid_rects[:, 1] + valid_rects[:, 3])
-
-    interface_check = np.array([is_point_on_interface(x, y) for x, y in zip(x_cords, y_cords)])
-    x_cords, y_cords = x_cords[~interface_check], y_cords[~interface_check]
+    y_cords = valid_rects[:, 1] + valid_rects[:, 3] // 2
 
     # Calculate distances to the center of the image
-    distances_to_center = np.linalg.norm(center_of_image - np.stack((x_cords, y_cords), axis=1), ord=2, axis=1)
+    distances_to_center = np.linalg.norm(center_of_image - np.stack((x_cords, y_cords), axis=1), axis=1) ** 1.75
 
     if distances_to_center.size > 0:
-        # Normalize distances and convert to probabilities (inversely proportional)
-        probabilities = 1 / (distances_to_center + 0.1)  # Adding 0.1 to avoid division by zero
+        if random.random() > 0.9:
+            selected_index = np.random.choice(distances_to_center.shape[0])
+        else:
+            min_dist_index = np.argmin(distances_to_center)
 
-        # Normalize probabilities to sum to 1
-        probabilities /= probabilities.sum()
+            # Exclude the point with the minimum distance from further calculations
+            distances_to_center = np.delete(distances_to_center, min_dist_index)
+            x_cords = np.delete(x_cords, min_dist_index)
+            y_cords = np.delete(y_cords, min_dist_index)
 
-        # Select a contour based on probabilities
-        selected_index = np.random.choice(distances_to_center.shape[0], p=probabilities)
+            probabilities = 1 / (distances_to_center + 0.1)
+            probabilities /= probabilities.sum()
+
+            selected_index = np.random.choice(distances_to_center.shape[0], p=probabilities)
 
         # Extract coordinates of the selected contour
         x_coordinate_screen, y_coordinate_screen = x_cords[selected_index], y_cords[selected_index]
@@ -768,15 +769,7 @@ def request_duel(driver):
 #         click_on_coordinates(driver, x_coordinate, y_coordinate)
 
 
-def close_all_popups(driver):
-    try:
-        driver.find_element(By.XPATH, "//span[contains(text(), 'Duel History')]")
-        logging.debug('Duel History popup found, closing...')
-        driver.find_element(By.XPATH, "//img[@alt='Close modal']").click()
-        return
-    except:
-        pass
-
+def close_secondary_popups(driver):
     try:
         driver.find_element(By.XPATH, "//span[contains(text(), 'Leaderboard')]")
         logging.debug('Leaderboard popup found, closing...')
@@ -809,42 +802,79 @@ def close_all_popups(driver):
     #     pass
 
     close_duel_end_popup(driver)
+    click_around(driver)
 
 
-def process_duel_request(position_left=True):
-    logging.debug('Processing duel request')
-    try_find_element("//button[contains(text(), 'Accept')]", "Accept first").click()
-    logging.debug('Duel accepted')
-    sleep(8)
+def close_main_popups(driver):
     try:
-        try_find_element("//span[contains(text(), 'Duel Request')]", "Accept duel popup")
-        logging.debug('Duel is not started yet, declining...')
-        try_find_element("//button[contains(text(), 'Decline')]", "Decline first", i=0).click()
+        driver.find_element(By.XPATH, "//span[contains(text(), 'Duel History')]")
+        logging.debug('Duel History popup found, closing...')
+        driver.find_element(By.XPATH, "//img[@alt='Close modal']").click()
         return
-    except Exception:
-        pass
-    logging.debug('Duel started')
-    sleep(6)
-
-    try:
-        click_on_coordinates(driver, *enemy_position_left2)
-        sleep(0.5)
-        click_on_coordinates(driver, *enemy_position_right2)
-        sleep(0.5)
-        click_on_coordinates(driver, *enemy_position_left)
-        sleep(0.5)
-        click_on_coordinates(driver, *enemy_position_right)
-        sleep(0.5)
-        click_on_coordinates(driver, *enemy_position_left3)
-        sleep(0.5)
-        click_on_coordinates(driver, *enemy_position_right3)
     except:
         pass
-    clear_chat(driver)
+
+
+def close_all_popups(driver):
+    close_secondary_popups(driver)
+    close_main_popups(driver)
+
+
+def process_duel_request():
+    logging.debug('Processing duel request')
+    accept_button = driver.find_element(By.XPATH,
+                                        "//div[contains(@class, 'pointer-events-auto')]//button[contains(text(), 'Accept')]")
+    sleep(0.75)
+    accept_button.click()
+    logging.debug('Duel accepted')
+
+    # try:
+    #     wait.until(EC.element_to_be_clickable((By.CLASS_NAME, "duel-entry-scene")))
+    # except:
+    #     logging.debug('Duel is not started yet, declining...')
+    #     driver.find_element(By.XPATH,
+    #                         "//div[contains(@class, 'pointer-events-auto')]//button[contains(text(), 'Decline')]").click()
+    #     return
+    sleep(8)
+    try:
+        driver.find_element(By.XPATH, "//span[contains(text(), 'Duel Request')]")
+        logging.debug('Duel is not started yet, declining...')
+        driver.find_element(By.XPATH,
+                            "//div[contains(@class, 'pointer-events-auto')]//button[contains(text(), 'Decline')]").click()
+        return
+    except:
+        pass
+
+    logging.debug('Duel started')
+    sleep(8)
+    clean_up_interface_regular(driver)
+
+    click_around(driver)
+    sleep(2)
+    click_around(driver)
+    sleep(2)
+    click_around(driver)
+    sleep(1)
+    click_around(driver)
 
     logging.debug('Waiting for duel to finish...')
     try_wait_for_element("//button[contains(text(), 'Close')]", "Close duel", wait_duel_close)
     close_duel_end_popup(driver)
+
+    clean_up_interface_regular(driver)
+
+
+def click_around(driver):
+    try:
+        click_on_coordinates(driver, *enemy_position_left)
+        sleep(0.25)
+        click_on_coordinates(driver, *enemy_position_right)
+        sleep(0.25)
+        click_on_coordinates(driver, *enemy_position_left2)
+        sleep(0.25)
+        click_on_coordinates(driver, *enemy_position_right2)
+    except:
+        pass
 
 
 def handle_captcha_failure(func):
@@ -929,15 +959,20 @@ def reload_page(driver):
 
 
 def reload_page_if_bugged(driver):
-    bug_texts = ['walk with a duel request screen open, please click the decline button or refresh the game.',
-                 'You are already in a duel request screen with someone else.']
+    bug_texts = [
+        'walk with a duel request screen open, please click the decline button or refresh the game.',
+        'You are already in a duel request screen with someone else.'
+    ]
+
     try:
-        if any([is_element_visible(driver, f"//span[contains(text(), '{text}')]") for text in bug_texts]):
-            clear_chat(driver)
-            sleep(10)
-            if any([is_element_visible(driver, f"//span[contains(text(), '{text}')]") for text in bug_texts]):
-                logging.debug('Page is bugged, reloading...')
-                reload_page(driver)
+        for text in bug_texts:
+            if is_element_visible(driver, f"//span[contains(text(), '{text}')]"):
+                clear_chat(driver)
+                sleep(10)  # Wait for some time before rechecking
+                if is_element_visible(driver, f"//span[contains(text(), '{text}')]"):
+                    logging.debug('Page is bugged, reloading...')
+                    reload_page(driver)
+                break  # Stop checking after finding the first visible bug text
     except:
         pass
 
@@ -957,6 +992,9 @@ def recursive_step_to_arena(driver, step_size_from=0, step_size_to=570):
         return
     logging.debug(f'Distance to arena: {distance_to_arena}, moving...')
 
+    if random.random() > 0.9:
+        click_around(driver)
+
     def sign(x):
         return 1 if x > 0 else -1
 
@@ -970,19 +1008,30 @@ def recursive_step_to_arena(driver, step_size_from=0, step_size_to=570):
     y_step_coord = tab_center_y + y_step
 
     try:
-        if not is_point_on_interface(x_step_coord, y_step_coord):
-            click_on_coordinates(driver, x_step_coord, y_step_coord)
+        click_on_coordinates(driver, x_step_coord, y_step_coord)
     except Exception as e:
         pass
-
-    sleep(1)
+    try:
+        driver.find_element(By.XPATH, "//div[contains(@class, 'profile-menu')]//button[contains(text(), 'X')]").click()
+    except:
+        pass
+    sleep(4)
 
     solve_captcha_if_required(driver)
-    close_all_popups(driver)
+    close_main_popups(driver)
 
     try:
-        try_find_element("//span[contains(text(), 'Duel Request')]", "Accept duel popup")
-        try_find_element("//button[contains(text(), 'Decline')]", "Accept first", i=0).click()
+        driver.find_element(By.XPATH, "//button[contains(text(), 'Accept')]").click()
+        sleep(2)
+    except:
+        pass
+
+    try:
+        driver.find_element(By.XPATH, "//span[contains(text(), 'Duel Request')]")
+        logging.debug('Duel request accepted')
+        sleep(1.5)
+        process_duel_request()
+        return
     except:
         pass
 
@@ -1003,6 +1052,23 @@ def clear_chat(driver):
     """
 
     # Execute the JavaScript with Selenium
+    driver.execute_script(script)
+
+
+def set_zoom_level(zoom=0.5):
+    driver.get("chrome://settings/appearance")
+    script = f"""
+    let settingsUiShadowRoot = document.querySelector('settings-ui').shadowRoot;
+    let settingsMainShadowRoot = settingsUiShadowRoot.querySelector('settings-main').shadowRoot;
+    let settingsBasicPageShadowRoot = settingsMainShadowRoot.querySelector('settings-basic-page').shadowRoot;
+    let settingsAppearanceSection = settingsBasicPageShadowRoot.querySelector('settings-section[page-title="Appearance"]');
+    let settingsAppearancePage = settingsAppearanceSection.querySelector('settings-appearance-page').shadowRoot;
+    let settingsAnimatedPages = settingsAppearancePage.querySelector('settings-animated-pages');
+    let zoomLevelSelect = settingsAnimatedPages.querySelector('#zoomLevel');
+    zoomLevelSelect.value = '{zoom}'; // Set the zoom level to 50%
+    zoomLevelSelect.dispatchEvent(new Event('change')); // Dispatch the event to ensure the change is registered
+    """
+
     driver.execute_script(script)
 
 
@@ -1044,6 +1110,14 @@ def complete_tutorial():
     wait_long.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Got it!')]"))).click()
 
 
+def clean_up_interface_regular(driver):
+    remove_first_xpath_element(driver, "//div[contains(@class, 'announcement-message-container')]")
+    remove_all_xpath_elements(driver, "//div[contains(@class, 'relative left')]")
+    remove_all_xpath_elements(driver, "//button[contains(@class, 'new-btn')]")
+    remove_all_xpath_elements(driver, "//div[contains(@class, 'confetti-holder')]")
+    clear_chat(driver)
+
+
 def clean_up_interface(driver):
     remove_first_xpath_element(driver, "//div[contains(@class, 'minimap-subcontainer')]")
     remove_first_xpath_element(driver, "//div[contains(@class, 'toolbar-buttons')]")
@@ -1058,20 +1132,51 @@ def clean_up_interface(driver):
     remove_all_xpath_elements(driver, "//div[contains(@class, 'combat-ui-container')]")
     remove_all_xpath_elements(driver, "//div[contains(@class, 'tab-switcher-container')]")
     remove_all_xpath_elements(driver, "//div[contains(@class, 'navigation-content')]")
+    remove_first_xpath_element(driver, "//section[contains(@class, 'message-form')]")
     remove_all_xpath_elements(driver, "//button[contains(@class, 'new-btn')]")
     remove_first_xpath_element(driver, "//div[@id='game']//div[contains(@style, 'display: block;')]")
     remove_all_xpath_elements(driver, "//aside[@id='main-layout-left-aside']")
 
-print(args.passive)
+    script = """
+    var xpath = "//aside[contains(@class, 'minimap-window')]";  // Example XPath, adjust as needed
+    var result = document.evaluate(xpath, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+
+    if (result) {
+        result.style.width = '0';
+        result.style.height = '0';
+    }
+    """
+
+    # Execute the script
+    driver.execute_script(script)
+
+    # Execute the script
+    driver.execute_script(script)
+
+    element = driver.find_element(By.CSS_SELECTOR, "aside.chat-window")
+    script = """
+    arguments[0].style.setProperty('left', '0px');
+    arguments[0].style.setProperty('bottom', '0px');
+    arguments[0].style.setProperty('width', '150px');
+    arguments[0].style.setProperty('height', '90px');
+    arguments[0].style.setProperty('min-width', '150px');
+    """
+    driver.execute_script(script, element)
+
+    action.scroll_by_amount(delta_y=-1000000, delta_x=0).perform()
+
+
 driver = Driver(extension_zip='./MetaMask.zip',
                 headless2=CONSOLE_MODE,
                 agent=user_agent,
-                chromium_arg='--mute-audio',
+                chromium_arg='mute-audio',
                 enable_3d_apis=True,
                 proxy=args.proxy)
 
 driver.maximize_window()
 driver.get('https://google.com')
+sleep(3)
+set_zoom_level(0.25)
 
 metamask_auto = MetaMaskAuto(driver,
                              password='11111111',
@@ -1098,6 +1203,10 @@ wait_long.until(EC.element_to_be_clickable((By.XPATH, "//span[contains(text(), '
 wait_long.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Connect Wallet')]"))).click()
 wait_fast.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'MetaMask')]"))).click()
 metamask_auto.connect()
+try:
+    wait.until(EC.element_to_be_clickable((By.XPATH, "//span[contains(text(), 'Play')]"))).click()
+except:
+    pass
 wait_long.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Enter World')]"))).click()
 wait_ultra_long.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Reconnect')]")))
 solve_captcha_if_required(driver)
@@ -1132,18 +1241,21 @@ complete_tutorial()
 action = ActionChains(driver)
 wait_second_accept = WebDriverWait(driver, 10, 1)
 wait_duel_close = WebDriverWait(driver, 180, 3)
+driver.set_window_size(500, 375)
 window_size = driver.get_window_size()
-tab_w = window_size['width']
-tab_h = window_size['height'] * 0.9
+# tab_w = window_size['width']
+# tab_h = window_size['height'] * 0.9
+# tab_w = window_size['width'] * 4
+# tab_h = window_size['height'] * 2.8
+tab_w = 2000 # window_size['width'] * 3.98
+tab_h = 1200 # window_size['height'] * 3.15
 
 tab_center_x = tab_w // 2
 tab_center_y = tab_h // 2
-enemy_position_left = (round(tab_w // 2 - (tab_w * 0.03)), tab_h // 2)
-enemy_position_right = (round(tab_w // 2 + (tab_w * 0.03)), tab_h // 2)
-enemy_position_left2 = (round(tab_w // 2 - (tab_w * 0.04)), tab_h // 2)
-enemy_position_right2 = (round(tab_w // 2 + (tab_w * 0.04)), tab_h // 2)
-enemy_position_left3 = (round(tab_w // 2 - (tab_w * 0.05)), tab_h // 2)
-enemy_position_right3 = (round(tab_w // 2 + (tab_w * 0.05)), tab_h // 2)
+enemy_position_left = (round(tab_w // 2 - (tab_w * 0.04)), tab_h // 2)
+enemy_position_right = (round(tab_w // 2 + (tab_w * 0.04)), tab_h // 2)
+enemy_position_left2 = (round(tab_w // 2 - (tab_w * 0.05)), tab_h // 2)
+enemy_position_right2 = (round(tab_w // 2 + (tab_w * 0.05)), tab_h // 2)
 
 img_raw = driver.get_screenshot_as_png()
 img_bytes = np.frombuffer(img_raw, np.uint8)
@@ -1151,18 +1263,21 @@ img = cv2.cvtColor(cv2.imdecode(img_bytes, cv2.IMREAD_COLOR), cv2.COLOR_BGR2RGB)
 img_h, img_w, _ = img.shape
 center_of_image = np.array((img_w // 2, img_h // 2))
 
-interface_regions_absolute = [[(0, 0.67), (0.4, 1)],
-                              [(0.42, 0), (0.6, 0.223)],
-                              [(0.45, 0.92), (0.536, 0.97)],
-                              [(0, 0), (0.21, 0.225)],
-                              [(0.8, 0), (1, 0.40)],
-                              [(0.8, 0.53), (1, 1)]]
+logging.info(f'Image size: {img_w}x{img_h}')
+logging.info(f'Tab size: {tab_w}x{tab_h}')
 
-interface_regions_relative = [[(int(img_w * x0), int(img_h * y0)), (int(img_w * x1), int(img_h * y1))] for
-                              (x0, y0), (x1, y1) in interface_regions_absolute]
+# interface_regions_absolute = [[(0, 0.67), (0.4, 1)],
+#                               [(0.42, 0), (0.6, 0.223)],
+#                               [(0.45, 0.92), (0.536, 0.97)],
+#                               [(0, 0), (0.21, 0.225)],
+#                               [(0.8, 0), (1, 0.40)],
+#                               [(0.8, 0.53), (1, 1)]]
 
-min_area_percentage = 0.00035
-max_area_percentage = 0.0021
+# interface_regions_relative = [[(int(img_w * x0), int(img_h * y0)), (int(img_w * x1), int(img_h * y1))] for
+#                               (x0, y0), (x1, y1) in interface_regions_absolute]
+
+min_area_percentage = 0.002
+max_area_percentage = 0.01
 min_detection_area = img_w * img_h * min_area_percentage
 max_detection_area = img_w * img_h * max_area_percentage
 detection_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (4, 6))
@@ -1176,11 +1291,12 @@ coins_farmed = 0
 
 logging.info('Setup done, starting duels abuse')
 tick = 0
-tick_rate = 2
+duel_request_interval = 2
 arena_position_x = 7400
 arena_position_y = 5360
 tick_reload_interval = 7200
-tick_chat_clear_interval = 100
+interface_update_interval = 50
+close_popup_interval = 30
 
 clean_up_interface(driver)
 
@@ -1190,8 +1306,10 @@ def active():
     while True:
         try:
             tick += 1
-            if tick % tick_chat_clear_interval == 0:
+            if tick % interface_update_interval == 0:
                 clear_chat(driver)
+                solve_captcha_if_required(driver)
+                close_all_popups(driver)
 
             if tick % tick_reload_interval == 0:
                 reload_page(driver)
@@ -1199,66 +1317,73 @@ def active():
             else:
                 reload_page_if_bugged(driver)
 
-            solve_captcha_if_required(driver)
-            close_all_popups(driver)
-            # display_chat(driver)
+            if tick % close_popup_interval == 0:
+                close_all_popups(driver)
+            else:
+                close_main_popups(driver)
+
             recursive_step_to_arena(driver)
-
-            if tick % tick_rate == 0:
+            if tick % duel_request_interval == 0:
                 request_duel(driver)
-
+                sleep(1.6)
             try:
                 driver.find_element(By.XPATH, "//span[contains(text(), 'Duel Request')]")
-                logging.debug('Duel request accepted')
+                logging.debug('Outcoming duel request accepted')
                 process_duel_request()
             except:
                 pass
 
-            driver.find_element(By.XPATH, "//button[contains(text(), 'Accept')]").click()
-            remove_first_xpath_element(driver, "//button[contains(text(), 'Accept')]")
-        except Exception as e:
+            incoming_duel_request = driver.find_element(By.XPATH,
+                                                        "//div[contains(@class, 'chat-container')]//button[contains(text(), 'Accept')]")
+            incoming_duel_request.click()
+            logging.debug('Incoming duel request accepted')
+            remove_first_xpath_element("//div[contains(@class, 'chat-container')]//button[contains(text(), 'Accept')]")
+        except Exception:
             pass
         finally:
-            sleep(0.5)
+            sleep(0.3)
 
 
-def passive():
-    global tick
-    remove_first_xpath_element(driver, "//canvas")
-    while True:
-        try:
-            tick += 1
-            if tick % tick_chat_clear_interval == 0:
-                clear_chat(driver)
+# def passive():
+#     global tick
+#     remove_first_xpath_element(driver, "//canvas")
+#     while True:
+#         try:
+#             tick += 1
+#             if tick % tick_chat_clear_interval == 0:
+#                 clear_chat(driver)
+#
+#             if tick % tick_reload_interval == 0:
+#                 reload_page(driver)
+#                 tick = 0
+#             else:
+#                 reload_page_if_bugged(driver)
+#
+#             solve_captcha_if_required(driver)
+#             close_all_popups(driver)
+#             distance_to_arena, _, _ = get_distance_to_arena(driver)
+#             if distance_to_arena > 350:
+#                 reload_page(driver)
+#                 recursive_step_to_arena(driver)
+#                 remove_first_xpath_element(driver, "//canvas")
+#             try:
+#                 driver.find_element(By.XPATH, "//span[contains(text(), 'Duel Request')]")
+#                 logging.debug('Duel request accepted')
+#                 process_duel_request()
+#             except:
+#                 pass
+#             driver.find_element(By.XPATH,
+#                                 "//div[contains(class(), 'chat-container')]//button[contains(text(), 'Accept')]").click()
+#             remove_first_xpath_element("//div[contains(class(), 'chat-container')]//button[contains(text(), 'Accept')]")
+#         except Exception as e:
+#             pass
+#         finally:
+#             sleep(2)
 
-            if tick % tick_reload_interval == 0:
-                reload_page(driver)
-                tick = 0
-            else:
-                reload_page_if_bugged(driver)
 
-            solve_captcha_if_required(driver)
-            close_all_popups(driver)
-            distance_to_arena, _, _ = get_distance_to_arena(driver)
-            if distance_to_arena > 350:
-                reload_page(driver)
-                recursive_step_to_arena(driver)
-                remove_first_xpath_element(driver, "//canvas")
-            try:
-                driver.find_element(By.XPATH, "//span[contains(text(), 'Duel Request')]")
-                logging.debug('Duel request accepted')
-                process_duel_request()
-            except:
-                pass
-            driver.find_element(By.XPATH, "//button[contains(text(), 'Accept')]").click()
-            remove_first_xpath_element("//button[contains(text(), 'Accept')]")
-        except Exception as e:
-            pass
-        finally:
-            sleep(2)
+active()
 
-
-if args.passive:
-    passive()
-else:
-    active()
+# if args.passive:
+#     passive()
+# else:
+#     active()
