@@ -1315,15 +1315,14 @@ def active():
             if tick % tick_reload_interval == 0:
                 reload_page(driver)
                 tick = 0
-            else:
-                reload_page_if_bugged(driver)
 
             if tick % close_popup_interval == 0:
                 close_all_popups(driver)
+                reload_page_if_bugged(driver)
             else:
                 close_main_popups(driver)
 
-            recursive_step_to_arena(driver)
+            # recursive_step_to_arena(driver)
             logging.info('Here 1')
             if tick % duel_request_interval == 0:
                 request_duel(driver)
