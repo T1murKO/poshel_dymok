@@ -852,9 +852,7 @@ def process_duel_request():
     sleep(5.5)
 
     click_around(driver)
-    sleep(1)
-    click_around(driver)
-    sleep(1)
+    sleep(2)
     click_around(driver)
 
     clean_up_interface_regular(driver)
@@ -869,12 +867,20 @@ def process_duel_request():
 def click_around(driver):
     try:
         click_on_coordinates(driver, *enemy_position_left)
-        sleep(0.25)
+        sleep(0.05)
         click_on_coordinates(driver, *enemy_position_right)
-        sleep(0.25)
+        sleep(0.05)
         click_on_coordinates(driver, *enemy_position_left2)
-        sleep(0.25)
+        sleep(0.05)
         click_on_coordinates(driver, *enemy_position_right2)
+        sleep(0.05)
+        click_on_coordinates(driver, *enemy_position_left3)
+        sleep(0.05)
+        click_on_coordinates(driver, *enemy_position_right3)
+        sleep(0.05)
+        click_on_coordinates(driver, *enemy_position_left4)
+        sleep(0.05)
+        click_on_coordinates(driver, *enemy_position_right4)
     except:
         pass
 
@@ -1256,6 +1262,11 @@ enemy_position_left = (round(tab_w // 2 - (tab_w * 0.04)), tab_h // 2)
 enemy_position_right = (round(tab_w // 2 + (tab_w * 0.04)), tab_h // 2)
 enemy_position_left2 = (round(tab_w // 2 - (tab_w * 0.05)), tab_h // 2)
 enemy_position_right2 = (round(tab_w // 2 + (tab_w * 0.05)), tab_h // 2)
+
+enemy_position_left3 = (round(tab_w // 2 - (tab_w * 0.04)), round(tab_h // 2 - (tab_h * 0.03)))
+enemy_position_right3 = (round(tab_w // 2 + (tab_w * 0.04)), round(tab_h // 2 - (tab_h * 0.03)))
+enemy_position_left4 = (round(tab_w // 2 - (tab_w * 0.05)), round(tab_h // 2 - (tab_h * 0.04)))
+enemy_position_right4 = (round(tab_w // 2 + (tab_w * 0.05)), round(tab_h // 2 - (tab_h * 0.04)))
 
 img_raw = driver.get_screenshot_as_png()
 img_bytes = np.frombuffer(img_raw, np.uint8)
