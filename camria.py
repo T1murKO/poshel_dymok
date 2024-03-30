@@ -17,6 +17,7 @@ from time import sleep
 from selenium.webdriver.common.action_chains import ActionChains
 import random
 import argparse
+import schedule
 
 parser = argparse.ArgumentParser(description="Script Configuration")
 
@@ -30,8 +31,11 @@ parser.add_argument("--passive", action="store_true", help="Run in console mode.
 parser.add_argument("--proxy", type=str, required=True, help="Proxy configuration in the format login:pass@host:port")
 parser.add_argument("--private-key", type=str, required=True, help="Path to the private key file")
 parser.add_argument("--api-key", type=str, required=True, help="API key to rucapcha")
+parser.add_argument("--tg-bot-token", type=str, required=True, help="Telegram bot token")
+parser.add_argument("--tg-chat-id", type=str, required=True, help="Telegram chat it")
+parser.add_argument("--tg-topic-id", type=str, required=True, help="Telegram topic id")
 
-# Set defaults for the boolean argument0s
+# Set defaults for the boolean arguments
 parser.set_defaults(save_image=False, debug=False, console_mode=False, passive=False)
 
 args = parser.parse_args()
@@ -40,6 +44,9 @@ SAVE_IMAGE = args.save_image
 DEBUG = args.debug
 CONSOLE_MODE = args.console_mode
 api_key = args.api_key
+tg_bot_token = args.tg_bot_token
+tg_chat_id = args.tg_chat_id
+tg_topic_id = args.tg_topic_id
 
 user_agent = ('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 '
               'Safari/537.36')
@@ -53,12 +60,62 @@ blast_networks = {
     'currency_symbol': 'ETH',
     'block_explorer': 'https://blastscan.io'
 }
-
+log_filename = 'log.txt'
 logging.basicConfig(
+    filename=log_filename,
     format='%(asctime)s %(message)s',
     level=logging.DEBUG if DEBUG else logging.INFO,
     datefmt='%Y-%m-%d %H:%M:%S',
 )
+
+scheduler_logger = logging.getLogger('schedule')
+scheduler_logger.setLevel(logging.WARNING)
+
+
+def send_log_updates(token, chat_id, topic_id):
+    global last_duels, duels
+
+    if last_duels == duels:
+        send_telegram_message_to_topic(token, chat_id, f'Bot {tg_topic_id} is stuck')
+
+    last_duels = duels
+
+    with open(log_filename, 'r') as log_file:
+        log_content = log_file.read()
+        send_telegram_message_to_topic(token, chat_id, log_content, topic_id)
+
+    with open(log_filename, 'w'):
+        pass
+
+    if last_duels == duels:
+        send_telegram_message_to_topic(token, chat_id, f'Bot {tg_topic_id} is stuck')
+
+
+def refresh_if_no_duels(driver):
+    global last_duels, duels
+    if last_duels == duels:
+        logging.debug('No duels found recently, refreshing page')
+        reload_page(driver)
+    last_duels = duels
+
+
+def send_stuck_alert(token, chat_id):
+    if last_duels == duels:
+        send_telegram_message_to_topic(token, chat_id, f'Bot {tg_topic_id} is stuck')
+
+
+def send_telegram_message_to_topic(token, chat_id, message, topic_id=None):
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    data = {
+        "chat_id": chat_id,
+        "text": message
+    }
+
+    if topic_id:
+        data['message_thread_id'] = topic_id
+
+    response = requests.post(url, data=data)
+    return response.json()
 
 
 def open_profile(profile_id, headless=0):
@@ -626,21 +683,13 @@ def time_tracker(func):
 
 
 def click_around_character(driver, x, y):
-    click_on_coordinates(driver, x * 0.95, y)
-    sleep(0.1)
-    click_on_coordinates(driver, x, y * 1.05)
-    sleep(0.1)
-    click_on_coordinates(driver, x * 1.05, y)
-    sleep(0.1)
-    click_on_coordinates(driver, x * 1.05, y)
-    sleep(0.1)
-    click_on_coordinates(driver, x, y * 0.95)
-    sleep(0.1)
-    click_on_coordinates(driver, x, y * 0.95)
-    sleep(0.1)
-    click_on_coordinates(driver, x * 0.95, y)
-    sleep(0.1)
-    click_on_coordinates(driver, x * 0.95, y)
+    click_on_coordinates(driver, tab_center_x * 0.9, tab_center_y)
+    sleep(0.2)
+    click_on_coordinates(driver, tab_center_x * 1.1, tab_center_y)
+    sleep(0.2)
+    click_on_coordinates(driver, tab_center_x, tab_center_y * 1.1)
+    sleep(0.2)
+    click_on_coordinates(driver, tab_center_x, tab_center_y * 0.9)
 
 
 def click_around(driver):
@@ -663,9 +712,10 @@ def click_around(driver):
     except:
         pass
 
+
 # @time_tracker
 def request_duel(driver):
-    logging.debug('Looking for duel opponent...')
+    logging.debug('Looking for duel opponent')
     img = cv2.cvtColor(cv2.imdecode(np.frombuffer(driver.get_screenshot_as_png(), np.uint8), cv2.IMREAD_COLOR),
                        cv2.COLOR_BGR2RGB)
 
@@ -721,13 +771,13 @@ def request_duel(driver):
 
         # Perform the action based on selected coordinates
         click_on_coordinates(driver, x_coordinate, y_coordinate)
-        # sleep(1.2)
-        # click_around_character(driver, x_coordinate, y_coordinate)
+        sleep(1.5)
+        click_around_character(driver, x_coordinate, y_coordinate)
 
 
 # @time_tracker
 # def request_duel(driver):
-#     logging.debug('Looking for duel opponent...')
+#     logging.debug('Looking for duel opponent')
 #     img_raw = driver.get_screenshot_as_png()
 #     img_bytes = np.frombuffer(img_raw, np.uint8)
 #     img = cv2.cvtColor(cv2.imdecode(img_bytes, cv2.IMREAD_COLOR), cv2.COLOR_BGR2RGB)
@@ -812,7 +862,7 @@ def request_duel(driver):
 def close_secondary_popups(driver):
     try:
         driver.find_element(By.XPATH, "//span[contains(text(), 'Leaderboard')]")
-        logging.debug('Leaderboard popup found, closing...')
+        logging.debug('Leaderboard popup found, closing')
         driver.find_element(By.XPATH, "//img[@alt='Close modal']").click()
         return
     except:
@@ -820,7 +870,7 @@ def close_secondary_popups(driver):
 
     try:
         driver.find_element(By.XPATH, "//span[contains(text(), 'Matchmaking Lobby')]")
-        logging.debug('Matchmaking Lobby popup found, closing...')
+        logging.debug('Matchmaking Lobby popup found, closing')
         driver.find_element(By.XPATH, "//img[@alt='Close modal']").click()
         return
     except:
@@ -828,7 +878,7 @@ def close_secondary_popups(driver):
 
     try:
         driver.find_element(By.XPATH, "//span[contains(text(), 'Something went wrong')]")
-        logging.debug('Something went wrong popup found, closing...')
+        logging.debug('Something went wrong popup found, closing')
         driver.find_element(By.XPATH, "//img[@alt='Close modal']").click()
         return
     except:
@@ -836,7 +886,7 @@ def close_secondary_popups(driver):
 
     # try:
     #     driver.find_element(By.XPATH, "//span[contains(text(), 'Blast Orb')]")
-    #     logging.debug('Blast Orb popup found, closing...')
+    #     logging.debug('Blast Orb popup found, closing')
     #     driver.find_element(By.XPATH, "//img[@alt='Close modal']").click()
     # except:
     #     pass
@@ -850,7 +900,7 @@ def close_main_popups(driver):
     try:
 
         driver.find_element(By.XPATH, "//span[contains(text(), 'Duel History')]")
-        logging.debug('Duel History popup found, closing...')
+        logging.debug('Duel History popup found, closing')
         driver.find_element(By.XPATH, "//img[@alt='Close modal']").click()
         return
     except:
@@ -874,14 +924,14 @@ def process_duel_request():
     # try:
     #     wait.until(EC.element_to_be_clickable((By.CLASS_NAME, "duel-entry-scene")))
     # except:
-    #     logging.debug('Duel is not started yet, declining...')
+    #     logging.debug('Duel is not started yet, declining')
     #     driver.find_element(By.XPATH,
     #                         "//div[contains(@class, 'pointer-events-auto')]//button[contains(text(), 'Decline')]").click()
     #     return
     sleep(8)
     try:
         driver.find_element(By.XPATH, "//span[contains(text(), 'Duel Request')]")
-        logging.debug('Duel is not started yet, declining...')
+        logging.debug('Duel is not started yet, declining')
         driver.find_element(By.XPATH,
                             "//div[contains(@class, 'pointer-events-auto')]//button[contains(text(), 'Decline')]").click()
         return
@@ -897,13 +947,11 @@ def process_duel_request():
 
     clean_up_interface_regular(driver)
 
-    logging.debug('Waiting for duel to finish...')
+    logging.debug('Waiting for duel to finish')
     try_wait_for_element("//button[contains(text(), 'Close')]", "Close duel", wait_duel_close)
     close_duel_end_popup(driver)
 
     clean_up_interface_regular(driver)
-
-
 
 
 def handle_captcha_failure(func):
@@ -912,7 +960,7 @@ def handle_captcha_failure(func):
         try:
             return func(driver, *args, **kwargs)
         except Exception as e:
-            print(f"Exception caught: {e}, refreshing page and retrying...")
+            print(f"Exception caught: {e}, refreshing page and retrying")
             driver.refresh()
             wait_long = WebDriverWait(driver, 45, 1)  # Adjust the timeout as necessary
             wait_long.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Enter World')]"))).click()
@@ -946,7 +994,7 @@ def is_captcha_required(driver):
 
 def solve_captcha_if_required(driver):
     if is_captcha_required(driver):
-        logging.debug('Captcha required, solving...')
+        logging.debug('Captcha required, solving')
         solve_capcha(driver)
         sleep(10)
         wait_long.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Reconnect')]"))).click()
@@ -954,7 +1002,7 @@ def solve_captcha_if_required(driver):
 
 
 def close_duel_end_popup(driver):
-    global coins_farmed, duels
+    global duels
     try:
         driver.find_element(By.XPATH, "//span[contains(text(), 'Duel Reward')]")
         duels += 1
@@ -968,7 +1016,7 @@ def close_duel_end_popup(driver):
 def display_chat(driver):
     element = driver.find_element(By.XPATH, "//button[contains(text(), 'General')]")
     if not element.is_displayed():
-        logging.debug('Chat not displayed, opening...')
+        logging.debug('Chat not displayed, opening')
         driver.find_element(By.XPATH, "//button[contains(text(), '💬')]").click()
 
 
@@ -981,6 +1029,7 @@ def clear_browser_cache():
 
 def reload_page(driver):
     driver.refresh()
+    logging.debug('Reloading page')
     wait_long.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Enter World')]"))).click()
     solve_captcha_if_required(driver)
     sleep(5)
@@ -999,7 +1048,7 @@ def reload_page_if_bugged(driver):
                 clear_chat(driver)
                 sleep(10)  # Wait for some time before rechecking
                 if is_element_visible(driver, f"//span[contains(text(), '{text}')]"):
-                    logging.debug('Page is bugged, reloading...')
+                    logging.debug('Page is bugged, reloading')
                     reload_page(driver)
                 break  # Stop checking after finding the first visible bug text
     except:
@@ -1019,7 +1068,7 @@ def recursive_step_to_arena(driver, step_size_from=0, step_size_to=570):
 
     if distance_to_arena <= 350:
         return
-    logging.debug(f'Distance to arena: {distance_to_arena}, moving...')
+    logging.debug(f'Distance to arena: {distance_to_arena}, moving')
 
     if random.random() > 0.9:
         click_around(driver)
@@ -1086,7 +1135,7 @@ def clear_chat(driver):
 
 def set_zoom_level(zoom=0.5):
     driver.get("chrome://settings/appearance")
-    sleep(3)
+    sleep(1)
     script = f"""
     let settingsUiShadowRoot = document.querySelector('settings-ui').shadowRoot;
     let settingsMainShadowRoot = settingsUiShadowRoot.querySelector('settings-main').shadowRoot;
@@ -1194,6 +1243,8 @@ def clean_up_interface(driver):
     action.scroll_by_amount(delta_y=-1000000, delta_x=0).perform()
 
 
+send_telegram_message_to_topic(tg_bot_token, tg_chat_id,f'=========== Bot started ===========', tg_topic_id)
+
 driver = Driver(extension_zip='./MetaMask.zip',
                 headless2=CONSOLE_MODE,
                 agent=user_agent,
@@ -1203,7 +1254,7 @@ driver = Driver(extension_zip='./MetaMask.zip',
 
 driver.maximize_window()
 driver.get('https://google.com')
-sleep(3)
+sleep(2)
 set_zoom_level(0.25)
 
 metamask_auto = MetaMaskAuto(driver,
@@ -1220,7 +1271,7 @@ driver.switch_to.window(driver.window_handles[0])
 metamask_auto.driver.get('https://play.cambria.gg/')
 wait_long.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Connect Wallet')]"))).click()
 wait_fast.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(., 'MetaMask')]"))).click()
-logging.debug('Connecting wallet...')
+logging.debug('Connecting wallet')
 metamask_auto.connect()
 metamask_auto.confirm()
 logging.debug('Connected wallet')
@@ -1256,8 +1307,8 @@ complete_tutorial()
 #     s = Service(chrome_driver)
 #     driver = webdriver.Chrome(service=s, options=options)
 #     return driver
-#
-#
+
+
 # chrome_driver, debugger_address = open_profile(46)
 # driver = _setup_driver(chrome_driver, debugger_address)
 # wait_fast = WebDriverWait(driver, 3, 1)
@@ -1275,8 +1326,8 @@ window_size = driver.get_window_size()
 # tab_h = window_size['height'] * 0.9
 # tab_w = window_size['width'] * 4
 # tab_h = window_size['height'] * 2.8
-tab_w = 2000 # window_size['width'] * 3.98
-tab_h = 1200 # window_size['height'] * 3.15
+tab_w = 2000  # window_size['width'] * 3.98
+tab_h = 1150  # window_size['height'] * 3.15
 
 tab_center_x = tab_w // 2
 tab_center_y = tab_h // 2
@@ -1318,10 +1369,11 @@ lower_pixel_border = np.array([146, 134, 43])
 upper_pixel_border = np.array([235, 190, 90])
 
 global duels
-global coins_farmed
+global last_duels
 duels = 0
-coins_farmed = 0
+last_duels = 0
 
+send_telegram_message_to_topic(tg_bot_token, tg_chat_id,f'Setup finished', tg_topic_id)
 logging.info('Setup done, starting duels abuse')
 tick = 0
 duel_request_interval = 2
@@ -1329,18 +1381,20 @@ arena_position_x = 7400
 arena_position_y = 5360
 tick_reload_interval = 7200
 interface_update_interval = 50
-close_popup_interval = 30
+close_popup_interval = 35
 
 clean_up_interface(driver)
 
 
 def active():
     global tick
+    schedule.every(10).minutes.do(send_log_updates, token=tg_bot_token, chat_id=tg_chat_id, topic_id=tg_topic_id)
+    schedule.every(5).minutes.do(refresh_if_no_duels, token=tg_bot_token, chat_id=tg_chat_id, topic_id=tg_topic_id)
     while True:
         try:
-            # logging.info(f'Tick: {tick}')
+            schedule.run_pending()
+
             tick += 1
-            # time1 = time.time()
             if tick % interface_update_interval == 0:
                 clear_chat(driver)
                 solve_captcha_if_required(driver)
@@ -1356,10 +1410,7 @@ def active():
             else:
                 close_main_popups(driver)
 
-            # logging.info(f'Interface update time: {time.time() - time1}')
-
             recursive_step_to_arena(driver)
-            # logging.info('Here 1')
             if tick % duel_request_interval == 0:
                 request_duel(driver)
                 sleep(1.1)

@@ -3,3 +3,4 @@ requests
 opencv-python
 numpy
 2captcha-python
+schedule
