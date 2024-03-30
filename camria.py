@@ -61,12 +61,23 @@ blast_networks = {
     'block_explorer': 'https://blastscan.io'
 }
 log_filename = 'log.txt'
-logging.basicConfig(
-    filename=log_filename,
-    format='%(asctime)s %(message)s',
-    level=logging.DEBUG if DEBUG else logging.INFO,
-    datefmt='%Y-%m-%d %H:%M:%S',
-)
+log_format = '%(asctime)s: %(message)s'
+logger = logging.getLogger('my_application')
+logger.setLevel(logging.INFO)  # Set the logging level
+
+# Create a file handler for writing logs to a file
+file_handler = logging.FileHandler(log_filename)
+file_handler.setLevel(logging.INFO)  # Set the logging level for the file handler
+file_handler.setFormatter(logging.Formatter(log_format))
+
+# Create a console handler for outputting logs to the terminal
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.INFO)  # Set the logging level for the console handler
+console_handler.setFormatter(logging.Formatter(log_format))
+
+# Add the handlers to the logger
+logger.addHandler(file_handler)
+logger.addHandler(console_handler)
 
 scheduler_logger = logging.getLogger('schedule')
 scheduler_logger.setLevel(logging.WARNING)
@@ -896,16 +907,13 @@ def close_secondary_popups(driver):
 
 
 def close_main_popups(driver):
-    # time1 = time.time()
     try:
-
         driver.find_element(By.XPATH, "//span[contains(text(), 'Duel History')]")
         logging.debug('Duel History popup found, closing')
         driver.find_element(By.XPATH, "//img[@alt='Close modal']").click()
         return
     except:
         pass
-    # logging.debug(f'Duel History popup closed in {time.time() - time1} seconds')
 
 
 def close_all_popups(driver):
@@ -999,6 +1007,7 @@ def solve_captcha_if_required(driver):
         sleep(10)
         wait_long.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Reconnect')]"))).click()
         sleep(15)
+        clean_up_interface(driver)
 
 
 def close_duel_end_popup(driver):
@@ -1072,6 +1081,10 @@ def recursive_step_to_arena(driver, step_size_from=0, step_size_to=570):
 
     if random.random() > 0.9:
         click_around(driver)
+
+    if random.random() > 0.95:
+        close_all_popups(driver)
+        solve_captcha_if_required(driver)
 
     def sign(x):
         return 1 if x > 0 else -1
@@ -1307,8 +1320,8 @@ complete_tutorial()
 #     s = Service(chrome_driver)
 #     driver = webdriver.Chrome(service=s, options=options)
 #     return driver
-
-
+#
+#
 # chrome_driver, debugger_address = open_profile(46)
 # driver = _setup_driver(chrome_driver, debugger_address)
 # wait_fast = WebDriverWait(driver, 3, 1)
@@ -1388,13 +1401,12 @@ clean_up_interface(driver)
 
 def active():
     global tick
-    schedule.every(10).minutes.do(send_log_updates, token=tg_bot_token, chat_id=tg_chat_id, topic_id=tg_topic_id)
-    schedule.every(5).minutes.do(refresh_if_no_duels, token=tg_bot_token, chat_id=tg_chat_id, topic_id=tg_topic_id)
+    schedule.every(2).minutes.do(send_log_updates, token=tg_bot_token, chat_id=tg_chat_id, topic_id=tg_topic_id)
+    schedule.every(1).minutes.do(refresh_if_no_duels, driver=driver)
     while True:
         try:
-            schedule.run_pending()
-
             tick += 1
+            schedule.run_pending()
             if tick % interface_update_interval == 0:
                 clear_chat(driver)
                 solve_captcha_if_required(driver)
@@ -1427,11 +1439,12 @@ def active():
             incoming_duel_request.click()
             logging.debug('Incoming duel request accepted')
             sleep(3)
-            remove_first_xpath_element("//div[contains(@class, 'chat-container')]//button[contains(text(), 'Accept')]")
-        except Exception:
+            remove_first_xpath_element(driver, "//div[contains(@class, 'chat-container')]//button[contains(text(), 'Accept')]")
+        except:
             pass
         finally:
             sleep(0.1)
+
 
 
 # def passive():
