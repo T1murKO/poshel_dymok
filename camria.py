@@ -1086,7 +1086,7 @@ def clear_chat(driver):
 
 def set_zoom_level(zoom=0.5):
     driver.get("chrome://settings/appearance")
-    sleep(60)
+    sleep(3)
     script = f"""
     let settingsUiShadowRoot = document.querySelector('settings-ui').shadowRoot;
     let settingsMainShadowRoot = settingsUiShadowRoot.querySelector('settings-main').shadowRoot;
@@ -1197,7 +1197,7 @@ def clean_up_interface(driver):
 driver = Driver(extension_zip='./MetaMask.zip',
                 headless2=CONSOLE_MODE,
                 agent=user_agent,
-                chromium_arg='mute-audio',
+                chromium_arg='mute-audio,lang=en',
                 enable_3d_apis=True,
                 proxy=args.proxy)
 
