@@ -806,7 +806,7 @@ def close_secondary_popups(driver):
 
 
 def close_main_popups(driver):
-    time1 = time.time()
+    # time1 = time.time()
     try:
 
         driver.find_element(By.XPATH, "//span[contains(text(), 'Duel History')]")
@@ -815,7 +815,7 @@ def close_main_popups(driver):
         return
     except:
         pass
-    logging.debug(f'Duel History popup closed in {time.time() - time1} seconds')
+    # logging.debug(f'Duel History popup closed in {time.time() - time1} seconds')
 
 
 def close_all_popups(driver):
@@ -1190,7 +1190,7 @@ metamask_auto.add_network('Blast', 'https://rpc.blast.io', '81457', 'ETH', 'http
 wait_fast = WebDriverWait(driver, 3, 1)
 wait = WebDriverWait(driver, 20, 1)
 wait_long = WebDriverWait(driver, 60, 1)
-wait_ultra_long = WebDriverWait(driver, 180, 1)
+wait_ultra_long = WebDriverWait(driver, 220, 1)
 driver.switch_to.window(driver.window_handles[0])
 metamask_auto.driver.get('https://play.cambria.gg/')
 wait_long.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Connect Wallet')]"))).click()
@@ -1308,9 +1308,9 @@ def active():
     global tick
     while True:
         try:
-            logging.info(f'Tick: {tick}')
+            # logging.info(f'Tick: {tick}')
             tick += 1
-            time1 = time.time()
+            # time1 = time.time()
             if tick % interface_update_interval == 0:
                 clear_chat(driver)
                 solve_captcha_if_required(driver)
@@ -1325,8 +1325,9 @@ def active():
                 reload_page_if_bugged(driver)
             else:
                 close_main_popups(driver)
-            logging.info(f'Interface update time: {time.time() - time1}')
-            continue
+
+            # logging.info(f'Interface update time: {time.time() - time1}')
+
             recursive_step_to_arena(driver)
             # logging.info('Here 1')
             if tick % duel_request_interval == 0:
