@@ -625,6 +625,44 @@ def time_tracker(func):
 #     return any([x0 <= x <= x1 and y0 <= y <= y1 for (x0, y0), (x1, y1) in interface_regions_relative])
 
 
+def click_around_character(driver, x, y):
+    click_on_coordinates(driver, x * 0.95, y)
+    sleep(0.1)
+    click_on_coordinates(driver, x, y * 1.05)
+    sleep(0.1)
+    click_on_coordinates(driver, x * 1.05, y)
+    sleep(0.1)
+    click_on_coordinates(driver, x * 1.05, y)
+    sleep(0.1)
+    click_on_coordinates(driver, x, y * 0.95)
+    sleep(0.1)
+    click_on_coordinates(driver, x, y * 0.95)
+    sleep(0.1)
+    click_on_coordinates(driver, x * 0.95, y)
+    sleep(0.1)
+    click_on_coordinates(driver, x * 0.95, y)
+
+
+def click_around(driver):
+    try:
+        click_on_coordinates(driver, *enemy_position_left)
+        sleep(0.05)
+        click_on_coordinates(driver, *enemy_position_right)
+        sleep(0.05)
+        click_on_coordinates(driver, *enemy_position_left2)
+        sleep(0.05)
+        click_on_coordinates(driver, *enemy_position_right2)
+        sleep(0.05)
+        click_on_coordinates(driver, *enemy_position_left3)
+        sleep(0.05)
+        click_on_coordinates(driver, *enemy_position_right3)
+        sleep(0.05)
+        click_on_coordinates(driver, *enemy_position_left4)
+        sleep(0.05)
+        click_on_coordinates(driver, *enemy_position_right4)
+    except:
+        pass
+
 # @time_tracker
 def request_duel(driver):
     logging.debug('Looking for duel opponent...')
@@ -683,6 +721,8 @@ def request_duel(driver):
 
         # Perform the action based on selected coordinates
         click_on_coordinates(driver, x_coordinate, y_coordinate)
+        # sleep(1.2)
+        # click_around_character(driver, x_coordinate, y_coordinate)
 
 
 # @time_tracker
@@ -864,25 +904,6 @@ def process_duel_request():
     clean_up_interface_regular(driver)
 
 
-def click_around(driver):
-    try:
-        click_on_coordinates(driver, *enemy_position_left)
-        sleep(0.05)
-        click_on_coordinates(driver, *enemy_position_right)
-        sleep(0.05)
-        click_on_coordinates(driver, *enemy_position_left2)
-        sleep(0.05)
-        click_on_coordinates(driver, *enemy_position_right2)
-        sleep(0.05)
-        click_on_coordinates(driver, *enemy_position_left3)
-        sleep(0.05)
-        click_on_coordinates(driver, *enemy_position_right3)
-        sleep(0.05)
-        click_on_coordinates(driver, *enemy_position_left4)
-        sleep(0.05)
-        click_on_coordinates(driver, *enemy_position_right4)
-    except:
-        pass
 
 
 def handle_captcha_failure(func):
@@ -1260,13 +1281,13 @@ tab_center_x = tab_w // 2
 tab_center_y = tab_h // 2
 enemy_position_left = (round(tab_w // 2 - (tab_w * 0.04)), tab_h // 2)
 enemy_position_right = (round(tab_w // 2 + (tab_w * 0.04)), tab_h // 2)
-enemy_position_left2 = (round(tab_w // 2 - (tab_w * 0.05)), tab_h // 2)
-enemy_position_right2 = (round(tab_w // 2 + (tab_w * 0.05)), tab_h // 2)
+enemy_position_left2 = (round(tab_w // 2 - (tab_w * 0.055)), tab_h // 2)
+enemy_position_right2 = (round(tab_w // 2 + (tab_w * 0.055)), tab_h // 2)
 
 enemy_position_left3 = (round(tab_w // 2 - (tab_w * 0.04)), round(tab_h // 2 - (tab_h * 0.03)))
 enemy_position_right3 = (round(tab_w // 2 + (tab_w * 0.04)), round(tab_h // 2 - (tab_h * 0.03)))
-enemy_position_left4 = (round(tab_w // 2 - (tab_w * 0.05)), round(tab_h // 2 - (tab_h * 0.04)))
-enemy_position_right4 = (round(tab_w // 2 + (tab_w * 0.05)), round(tab_h // 2 - (tab_h * 0.04)))
+enemy_position_left4 = (round(tab_w // 2 - (tab_w * 0.055)), round(tab_h // 2 - (tab_h * 0.04)))
+enemy_position_right4 = (round(tab_w // 2 + (tab_w * 0.055)), round(tab_h // 2 - (tab_h * 0.04)))
 
 img_raw = driver.get_screenshot_as_png()
 img_bytes = np.frombuffer(img_raw, np.uint8)
