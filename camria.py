@@ -827,7 +827,7 @@ def process_duel_request():
     logging.debug('Processing duel request')
     accept_button = driver.find_element(By.XPATH,
                                         "//div[contains(@class, 'pointer-events-auto')]//button[contains(text(), 'Accept')]")
-    sleep(0.75)
+    sleep(0.5)
     accept_button.click()
     logging.debug('Duel accepted')
 
@@ -1340,7 +1340,7 @@ def active():
             # logging.info('Here 1')
             if tick % duel_request_interval == 0:
                 request_duel(driver)
-                sleep(1.6)
+                sleep(1.1)
 
             try:
                 driver.find_element(By.XPATH, "//span[contains(text(), 'Duel Request')]")
@@ -1353,11 +1353,12 @@ def active():
                                                         "//div[contains(@class, 'chat-container')]//button[contains(text(), 'Accept')]")
             incoming_duel_request.click()
             logging.debug('Incoming duel request accepted')
+            sleep(3)
             remove_first_xpath_element("//div[contains(@class, 'chat-container')]//button[contains(text(), 'Accept')]")
         except Exception:
             pass
         finally:
-            sleep(0.3)
+            sleep(0.1)
 
 
 # def passive():
