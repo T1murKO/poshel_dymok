@@ -849,16 +849,15 @@ def process_duel_request():
         pass
 
     logging.debug('Duel started')
-    sleep(8)
-    clean_up_interface_regular(driver)
+    sleep(5.5)
 
-    click_around(driver)
-    sleep(2)
-    click_around(driver)
-    sleep(2)
     click_around(driver)
     sleep(1)
     click_around(driver)
+    sleep(1)
+    click_around(driver)
+
+    clean_up_interface_regular(driver)
 
     logging.debug('Waiting for duel to finish...')
     try_wait_for_element("//button[contains(text(), 'Close')]", "Close duel", wait_duel_close)
@@ -1114,10 +1113,8 @@ def complete_tutorial():
 
 
 def clean_up_interface_regular(driver):
-    remove_first_xpath_element(driver, "//div[contains(@class, 'announcement-message-container')]")
     remove_all_xpath_elements(driver, "//div[contains(@class, 'relative left')]")
     remove_all_xpath_elements(driver, "//button[contains(@class, 'new-btn')]")
-    remove_all_xpath_elements(driver, "//div[contains(@class, 'confetti-holder')]")
     clear_chat(driver)
 
 
@@ -1243,7 +1240,7 @@ complete_tutorial()
 
 action = ActionChains(driver)
 wait_second_accept = WebDriverWait(driver, 10, 1)
-wait_duel_close = WebDriverWait(driver, 180, 3)
+wait_duel_close = WebDriverWait(driver, 120, 3)
 driver.set_window_size(500, 375)
 window_size = driver.get_window_size()
 # tab_w = window_size['width']
