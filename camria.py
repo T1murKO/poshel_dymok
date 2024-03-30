@@ -1086,6 +1086,7 @@ def clear_chat(driver):
 
 def set_zoom_level(zoom=0.5):
     driver.get("chrome://settings/appearance")
+    sleep(3)
     script = f"""
     let settingsUiShadowRoot = document.querySelector('settings-ui').shadowRoot;
     let settingsMainShadowRoot = settingsUiShadowRoot.querySelector('settings-main').shadowRoot;
