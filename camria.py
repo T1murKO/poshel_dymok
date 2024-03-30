@@ -806,15 +806,16 @@ def close_secondary_popups(driver):
 
 
 def close_main_popups(driver):
+    time1 = time.time()
     try:
-        time1 = time.time()
+
         driver.find_element(By.XPATH, "//span[contains(text(), 'Duel History')]")
         logging.debug('Duel History popup found, closing...')
         driver.find_element(By.XPATH, "//img[@alt='Close modal']").click()
-        logging.debug(f'Duel History popup closed in {time.time() - time1} seconds')
         return
     except:
         pass
+    logging.debug(f'Duel History popup closed in {time.time() - time1} seconds')
 
 
 def close_all_popups(driver):
