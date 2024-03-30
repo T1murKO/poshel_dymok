@@ -1307,6 +1307,7 @@ def active():
         try:
             logging.info(f'Tick: {tick}')
             tick += 1
+            continue
             if tick % interface_update_interval == 0:
                 clear_chat(driver)
                 solve_captcha_if_required(driver)
@@ -1327,12 +1328,14 @@ def active():
             if tick % duel_request_interval == 0:
                 request_duel(driver)
                 sleep(1.6)
+
             try:
                 driver.find_element(By.XPATH, "//span[contains(text(), 'Duel Request')]")
                 logging.debug('Outcoming duel request accepted')
                 process_duel_request()
             except:
                 pass
+
             logging.info('Here 2')
             incoming_duel_request = driver.find_element(By.XPATH,
                                                         "//div[contains(@class, 'chat-container')]//button[contains(text(), 'Accept')]")
