@@ -807,9 +807,11 @@ def close_secondary_popups(driver):
 
 def close_main_popups(driver):
     try:
+        time1 = time.time()
         driver.find_element(By.XPATH, "//span[contains(text(), 'Duel History')]")
         logging.debug('Duel History popup found, closing...')
         driver.find_element(By.XPATH, "//img[@alt='Close modal']").click()
+        logging.debug(f'Duel History popup closed in {time.time() - time1} seconds')
         return
     except:
         pass
@@ -1307,7 +1309,7 @@ def active():
         try:
             logging.info(f'Tick: {tick}')
             tick += 1
-            continue
+            time1 = time.time()
             if tick % interface_update_interval == 0:
                 clear_chat(driver)
                 solve_captcha_if_required(driver)
@@ -1322,9 +1324,10 @@ def active():
                 reload_page_if_bugged(driver)
             else:
                 close_main_popups(driver)
-
-            # recursive_step_to_arena(driver)
-            logging.info('Here 1')
+            logging.info(f'Interface update time: {time.time() - time1}')
+            continue
+            recursive_step_to_arena(driver)
+            # logging.info('Here 1')
             if tick % duel_request_interval == 0:
                 request_duel(driver)
                 sleep(1.6)
@@ -1336,7 +1339,6 @@ def active():
             except:
                 pass
 
-            logging.info('Here 2')
             incoming_duel_request = driver.find_element(By.XPATH,
                                                         "//div[contains(@class, 'chat-container')]//button[contains(text(), 'Accept')]")
             incoming_duel_request.click()
