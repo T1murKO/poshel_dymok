@@ -85,26 +85,31 @@ scheduler_logger.setLevel(logging.WARNING)
 
 
 def send_log_updates(token, chat_id, topic_id):
-    global last_duels, duels
+    try:
+        global last_duels, duels
 
-    if last_duels == duels:
-        send_telegram_message_to_topic(token, chat_id, f'Bot {tg_topic_id} is stuck')
+        if last_duels == duels:
+            send_telegram_message_to_topic(token, chat_id, f'Bot {tg_topic_id} is stuck')
 
-    last_duels = duels
+        last_duels = duels
 
-    with open(log_filename, 'r') as log_file:
-        log_content = log_file.read()
-        send_telegram_message_to_topic(token, chat_id, log_content, topic_id)
+        with open(log_filename, 'r') as log_file:
+            log_content = log_file.read()
+            send_telegram_message_to_topic(token, chat_id, log_content, topic_id)
 
-    with open(log_filename, 'w'):
-        pass
+        with open(log_filename, 'w'):
+            pass
+    except Exception as e:
+        print(f'Error sending logs: {e}')
 
 
 def refresh_if_no_duels(driver):
     global last_duels, duels
     if last_duels == duels:
         logger.debug('No duels found recently, refreshing page')
-        reload_page(driver)
+        with page_refresh_lock:
+            reload_page(driver)
+
     last_duels = duels
 
 
@@ -779,9 +784,7 @@ def request_duel(driver):
             cv2.imwrite('img_view.png', img)
 
         # Perform the action based on selected coordinates
-        click_on_coordinates(driver, x_coordinate, y_coordinate)
-        sleep(1.5)
-        # click_around_character(driver, x_coordinate, y_coordinate)
+        return x_coordinate, y_coordinate
 
 
 # @time_tracker
@@ -869,39 +872,40 @@ def request_duel(driver):
 
 
 def close_secondary_popups(driver):
-    try:
-        driver.find_element(By.XPATH, "//span[contains(text(), 'Leaderboard')]")
-        logger.debug('Leaderboard popup found, closing')
-        driver.find_element(By.XPATH, "//img[@alt='Close modal']").click()
-        return
-    except:
-        pass
+    with page_refresh_lock:
+        with duel_request_lock:
+            try:
+                driver.find_element(By.XPATH, "//span[contains(text(), 'Leaderboard')]")
+                logger.debug('Leaderboard popup found, closing')
+                driver.find_element(By.XPATH, "//div[@class='close_button']").click()
+                return
+            except:
+                pass
 
-    try:
-        driver.find_element(By.XPATH, "//span[contains(text(), 'Matchmaking Lobby')]")
-        logger.debug('Matchmaking Lobby popup found, closing')
-        driver.find_element(By.XPATH, "//img[@alt='Close modal']").click()
-        return
-    except:
-        pass
+            try:
+                driver.find_element(By.XPATH, "//span[contains(text(), 'Matchmaking Lobby')]")
+                logger.debug('Matchmaking Lobby popup found, closing')
+                driver.find_element(By.XPATH, "//img[@alt='Close modal']").click()
+                return
+            except:
+                pass
 
-    try:
-        driver.find_element(By.XPATH, "//span[contains(text(), 'Something went wrong')]")
-        logger.debug('Something went wrong popup found, closing')
-        driver.find_element(By.XPATH, "//img[@alt='Close modal']").click()
-        return
-    except:
-        pass
+            try:
+                driver.find_element(By.XPATH, "//button[contains(text(), 'Back To Character')]").click()
+                logger.debug('Back To Character found, closing')
+                return
+            except:
+                pass
 
-    # try:
-    #     driver.find_element(By.XPATH, "//span[contains(text(), 'Blast Orb')]")
-    #     logger.debug('Blast Orb popup found, closing')
-    #     driver.find_element(By.XPATH, "//img[@alt='Close modal']").click()
-    # except:
-    #     pass
+            try:
+                driver.find_element(By.XPATH, "//span[contains(text(), 'Something went wrong')]")
+                logger.debug('Something went wrong popup found, closing')
+                driver.find_element(By.XPATH, "//img[@alt='Close modal']").click()
+                return
+            except:
+                pass
 
-    close_duel_end_popup(driver)
-    # click_around(driver)
+        close_duel_end_popup(driver)
 
 
 def close_main_popups(driver):
@@ -914,11 +918,6 @@ def close_main_popups(driver):
         pass
 
 
-def close_all_popups(driver):
-    close_secondary_popups(driver)
-    close_main_popups(driver)
-
-
 def process_duel():
     logger.debug('Processing duel request')
     accept_button = driver.find_element(By.XPATH,
@@ -928,7 +927,7 @@ def process_duel():
     logger.debug('Duel accepted')
 
     try:
-        wait.until(EC.element_to_be_clickable((By.CLASS_NAME, "duel-entry-scene")))
+        wait_duel_start.until(EC.element_to_be_clickable((By.CLASS_NAME, "duel-entry-scene")))
     except:
         logger.debug('Duel is not started yet, declining')
         driver.find_element(By.XPATH,
@@ -945,7 +944,7 @@ def process_duel():
     #     pass
 
     logger.debug('Duel started')
-    sleep(5.5)
+    sleep(8)
 
     click_around(driver)
     sleep(2)
@@ -960,23 +959,9 @@ def process_duel():
     clean_up_interface_regular(driver)
 
 
-def handle_captcha_failure(func):
-    @wraps(func)
-    def wrapper(driver, *args, **kwargs):
-        try:
-            return func(driver, *args, **kwargs)
-        except Exception as e:
-            print(f"Exception caught: {e}, refreshing page and retrying")
-            driver.refresh()
-            wait_long = WebDriverWait(driver, 45, 1)  # Adjust the timeout as necessary
-            wait_long.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Enter World')]"))).click()
-            wait_long.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Reconnect')]")))
-
-    return wrapper
-
-
-@handle_captcha_failure
 def solve_capcha(driver):
+    wait_ultra_long.until(EC.element_to_be_clickable((By.XPATH, "//div[@id='recaptcha-v2' and @class='g-recaptcha']")))
+    EC.element_to_be_clickable((By.XPATH, "//div[@id='recaptcha-v2' and @class='g-recaptcha']"))
     recaptcha_v2_element = driver.find_element(By.XPATH, "//div[@id='recaptcha-v2' and @class='g-recaptcha']")
     sitekey = recaptcha_v2_element.get_attribute('data-sitekey')
     solver = TwoCaptcha(api_key)
@@ -1034,22 +1019,16 @@ def clear_browser_cache():
     })
 
 
+@retry(5)
 def reload_page(driver):
-    try:
-        driver.refresh()
-        logger.debug('Reloading page')
-        wait_long.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Enter World')]")))
-        sleep(10)
-        driver.find_element(By.XPATH, "//button[contains(text(), 'Enter World')]").click()
-        sleep(6)
-        solve_captcha_if_required(driver)
-        close_all_popups(driver)
-        close_duel_end_popup(driver)
-    except Exception as e:
-        print(f"Exception caught in reload_page: {e}, refreshing page and retrying")
-        raise e
-    # sleep(8)
-    # clean_up_interface(driver)
+    driver.refresh()
+    logger.debug('Reloading page')
+    wait_long.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Enter World')]")))
+    sleep(10)
+    driver.find_element(By.XPATH, "//button[contains(text(), 'Enter World')]").click()
+    sleep(6)
+    solve_captcha_if_required(driver)
+    close_duel_end_popup(driver)
 
 
 def reload_page_if_bugged(driver):
@@ -1065,7 +1044,8 @@ def reload_page_if_bugged(driver):
                 sleep(10)  # Wait for some time before rechecking
                 if is_element_visible(driver, f"//span[contains(text(), '{text}')]"):
                     logger.debug('Page is bugged, reloading')
-                    reload_page(driver)
+                    with page_refresh_lock:
+                        reload_page(driver)
                 break  # Stop checking after finding the first visible bug text
     except:
         pass
@@ -1204,7 +1184,9 @@ def complete_tutorial():
 def clean_up_interface_regular(driver):
     remove_all_xpath_elements(driver, "//div[contains(@class, 'relative left')]")
     remove_all_xpath_elements(driver, "//button[contains(@class, 'new-btn')]")
+    remove_first_xpath_element(driver, "//div[contains(@class, 'announcement-message-container')]")
     clear_chat(driver)
+    action.scroll_by_amount(delta_y=-1000000, delta_x=0).perform()
 
 
 def clean_up_interface(driver):
@@ -1255,7 +1237,8 @@ def clean_up_interface(driver):
     action.scroll_by_amount(delta_y=-1000000, delta_x=0).perform()
 
 
-send_telegram_message_to_topic(tg_bot_token, tg_chat_id,f'=========== Bot started ===========', tg_topic_id)
+send_telegram_message_to_topic(tg_bot_token, tg_chat_id, f'=========== Bot started ===========', tg_topic_id)
+
 
 driver = Driver(extension_zip='./MetaMask.zip',
                 headless2=CONSOLE_MODE,
@@ -1280,6 +1263,8 @@ wait_fast = WebDriverWait(driver, 3, 1)
 wait = WebDriverWait(driver, 20, 1)
 wait_long = WebDriverWait(driver, 60, 1)
 wait_ultra_long = WebDriverWait(driver, 220, 1)
+wait_tech_work_finish = WebDriverWait(driver, 180, 1)
+wait_duel_start = WebDriverWait(driver, 16, 1)
 driver.switch_to.window(driver.window_handles[0])
 metamask_auto.driver.get('https://play.cambria.gg/')
 wait_long.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Connect Wallet')]"))).click()
@@ -1326,10 +1311,13 @@ complete_tutorial()
 # driver = _setup_driver(chrome_driver, debugger_address)
 # wait_fast = WebDriverWait(driver, 3, 1)
 # wait = WebDriverWait(driver, 20, 1)
-# wait_long = WebDriverWait(driver, 40, 1)
+# wait_long = WebDriverWait(driver, 60, 1)
+# wait_ultra_long = WebDriverWait(driver, 220, 1)
+# wait_tech_work_finish = WebDriverWait(driver, 180, 1)
+# wait_duel_start = WebDriverWait(driver, 16, 1)
 # driver.switch_to.window(driver.window_handles[0])
 # driver.maximize_window()
-
+# action = ActionChains(driver)
 
 wait_second_accept = WebDriverWait(driver, 10, 1)
 wait_duel_close = WebDriverWait(driver, 120, 3)
@@ -1384,18 +1372,14 @@ last_duels = 0
 
 send_telegram_message_to_topic(tg_bot_token, tg_chat_id, f'Setup finished', tg_topic_id)
 logger.info('Setup done, starting duels abuse')
-tick = 0
-duel_request_interval = 2
 arena_position_x = 7400
 arena_position_y = 5360
-tick_reload_interval = 7200
-interface_update_interval = 50
-close_popup_interval = 35
 
 clean_up_interface(driver)
 
 incoming_request_lock = threading.Lock()
 duel_request_lock = threading.Lock()
+page_refresh_lock = threading.Lock()
 
 
 def run_scheduler():
@@ -1407,15 +1391,15 @@ def run_scheduler():
 def incoming_requests_listener():
     while True:
         try:
-            incoming_duel_request = driver.find_element(By.XPATH,
-                                                        "//div[contains(@class, 'chat-container')]//button[contains(text(), 'Accept')]")
-            with duel_request_lock:
+            with page_refresh_lock:
+                incoming_duel_request = driver.find_element(By.XPATH,
+                                                            "//div[contains(@class, 'chat-container')]//button[contains(text(), 'Accept')]")
+                logger.debug('Incoming duel request accepted')
                 with incoming_request_lock:
                     incoming_duel_request.click()
-                    logger.debug('Incoming duel request accepted')
                     sleep(3)
-                    remove_first_xpath_element(driver,
-                                               "//div[contains(@class, 'chat-container')]//button[contains(text(), 'Accept')]")
+                remove_first_xpath_element(driver,
+                                           "//div[contains(@class, 'chat-container')]//button[contains(text(), 'Accept')]")
         except:
             pass
         finally:
@@ -1425,21 +1409,23 @@ def incoming_requests_listener():
 def duel_request_listener():
     while True:
         try:
-            driver.find_element(By.XPATH, "//span[contains(text(), 'Duel Request')]")
-            with duel_request_lock:
-                logger.debug('Outcoming duel request accepted')
-                process_duel()
+            with page_refresh_lock:
+                driver.find_element(By.XPATH, "//span[contains(text(), 'Duel Request')]")
+                logger.debug('Duel request accepted')
+                with duel_request_lock:
+                    with incoming_request_lock:
+                        process_duel()
         except:
             pass
         finally:
-            time.sleep(0.5)
+            time.sleep(0.25)
 
 
 def update_interface(driver):
     try:
-        clear_chat(driver)
         solve_captcha_if_required(driver)
-        close_all_popups(driver)
+        close_secondary_popups(driver)
+        clean_up_interface_regular(driver)
     except Exception as e:
         print(f'Exception caught in update_interface: {e}')
         pass
@@ -1448,11 +1434,18 @@ def update_interface(driver):
 def duel_opponent_search():
     while True:
         try:
-            with duel_request_lock:
-                with incoming_request_lock:
-                    close_main_popups(driver)
-                    recursive_step_to_arena(driver)
-                    request_duel(driver)
+            with page_refresh_lock:
+                close_main_popups(driver)
+                recursive_step_to_arena(driver)
+                x_coordinate, y_coordinate = request_duel(driver)
+                with duel_request_lock:
+                    with incoming_request_lock:
+                        click_on_coordinates(driver, x_coordinate, y_coordinate)
+                        sleep(1.75)
+
+                if random.random() > 0.6:
+                    click_around_character(driver, x_coordinate, y_coordinate)
+
         except Exception as e:
             print(f'Exception caught in duel_opponent_search: {e}')
             pass
@@ -1463,7 +1456,7 @@ def duel_opponent_search():
 # Set up your scheduled tasks
 schedule.every(60).minutes.do(reload_page, driver=driver)
 schedule.every(5).minutes.do(refresh_if_no_duels, driver=driver)
-schedule.every(3).minutes.do(update_interface, driver=driver)
+schedule.every(2).minutes.do(update_interface, driver=driver)
 schedule.every(10).minutes.do(send_log_updates, token=tg_bot_token, chat_id=tg_chat_id, topic_id=tg_topic_id)
 
 scheduler_thread = threading.Thread(target=run_scheduler)
@@ -1477,66 +1470,3 @@ duel_request_listener_thread.start()
 
 duel_opponent_search_thread = threading.Thread(target=duel_opponent_search)
 duel_opponent_search_thread.start()
-
-
-# def active():
-#     global tick
-#     while True:
-#         try:
-#             tick += 1
-#             close_main_popups(driver)
-#             recursive_step_to_arena(driver)
-#
-#             if tick % duel_request_interval == 0:
-#                 request_duel(driver)
-#                 sleep(1.1)
-#
-#         except:
-#             pass
-#         finally:
-#             sleep(0.1)
-
-
-# def passive():
-#     global tick
-#     remove_first_xpath_element(driver, "//canvas")
-#     while True:
-#         try:
-#             tick += 1
-#             if tick % tick_chat_clear_interval == 0:
-#                 clear_chat(driver)
-#
-#             if tick % tick_reload_interval == 0:
-#                 reload_page(driver)
-#                 tick = 0
-#             else:
-#                 reload_page_if_bugged(driver)
-#
-#             solve_captcha_if_required(driver)
-#             close_all_popups(driver)
-#             distance_to_arena, _, _ = get_distance_to_arena(driver)
-#             if distance_to_arena > 350:
-#                 reload_page(driver)
-#                 recursive_step_to_arena(driver)
-#                 remove_first_xpath_element(driver, "//canvas")
-#             try:
-#                 driver.find_element(By.XPATH, "//span[contains(text(), 'Duel Request')]")
-#                 logger.debug('Duel request accepted')
-#                 process_duel_request()
-#             except:
-#                 pass
-#             driver.find_element(By.XPATH,
-#                                 "//div[contains(class(), 'chat-container')]//button[contains(text(), 'Accept')]").click()
-#             remove_first_xpath_element("//div[contains(class(), 'chat-container')]//button[contains(text(), 'Accept')]")
-#         except Exception as e:
-#             pass
-#         finally:
-#             sleep(2)
-
-
-# active()
-
-# if args.passive:
-#     passive()
-# else:
-#     active()
