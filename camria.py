@@ -918,23 +918,26 @@ def close_main_popups(driver):
         pass
 
 
-def decline_duel(driver, max_attempts=3):
+def decline_duel(driver, max_attempts=4):
     logger.debug('Attempting to decline duel')
     for attempt in range(max_attempts):
         # Click the decline button
-        decline_button = driver.find_element(By.XPATH, "//div[contains(@class, 'pointer-events-auto')]//button[contains(text(), 'Decline')]")
-        decline_button.click()
-
-        # Wait a short moment for the action to take effect
-        time.sleep(1.5)
-
-        # Check if the "Duel Request" text is still visible
         try:
-            driver.find_element(By.XPATH, "//span[contains(text(), 'Duel Request')]")
-            logger.debug('Duel Request is still visible, attempting to decline again')
+            decline_button = driver.find_element(By.XPATH, "//div[contains(@class, 'pointer-events-auto')]//button[contains(text(), 'Decline')]")
+            decline_button.click()
+
+            # Wait a short moment for the action to take effect
+            time.sleep(1.25)
+
+            # Check if the "Duel Request" text is still visible
+            try:
+                driver.find_element(By.XPATH, "//span[contains(text(), 'Duel Request')]")
+                logger.debug('Duel Request is still visible, attempting to decline again')
+            except:
+                logger.debug('Duel Request is no longer visible, duel declined successfully')
+                return True  # Duel declined successfully
         except:
-            logger.debug('Duel Request is no longer visible, duel declined successfully')
-            return True  # Duel declined successfully
+            logger.error(f'Failed to decline duel attempt# {attempt}')
 
     logger.error('Max attempts to decline duel reached, duel may not be declined properly')
 
@@ -1055,7 +1058,6 @@ def reload_page(driver):
     wait_long.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Enter World')]")))
     sleep(10)
     driver.find_element(By.XPATH, "//button[contains(text(), 'Enter World')]").click()
-    sleep(6)
     solve_captcha_if_required(driver)
     try:
         wait.until(EC.element_to_be_clickable((By.XPATH, "//span[contains(text(), 'Blast Orb')]")))
@@ -1094,10 +1096,11 @@ def get_distance_to_arena(driver):
     return distance_to_arena, x_position_on_map, y_position_on_map
 
 
-def recursive_step_to_arena(driver, step_size_from=0, step_size_to=570, max_recursion_depth=4, current_depth=0):
+def recursive_step_to_arena(driver, step_size_from=0, step_size_to=570, max_recursion_depth=3, current_depth=0):
+    distance_to_arena, x_position_on_map, y_position_on_map = get_distance_to_arena(driver)
+
     if current_depth >= max_recursion_depth:
         return
-    distance_to_arena, x_position_on_map, y_position_on_map = get_distance_to_arena(driver)
 
     if distance_to_arena <= 350:
         return
@@ -1474,6 +1477,10 @@ def duel_opponent_search():
             with page_refresh_lock:
                 close_main_popups(driver)
                 recursive_step_to_arena(driver)
+                distance_to_arena, _, _ = get_distance_to_arena(driver)
+                if distance_to_arena > 350:
+                    continue
+
                 x_coordinate, y_coordinate = request_duel(driver)
                 with duel_request_lock:
                     with incoming_request_lock:
@@ -1492,9 +1499,9 @@ def duel_opponent_search():
 
 # Set up your scheduled tasks
 schedule.every(60).minutes.do(reload_page, driver=driver)
-schedule.every(5).minutes.do(refresh_if_no_duels, driver=driver)
-schedule.every(3).minutes.do(update_interface, driver=driver)
-schedule.every(10).minutes.do(send_log_updates, token=tg_bot_token, chat_id=tg_chat_id, topic_id=tg_topic_id)
+schedule.every(6).minutes.do(refresh_if_no_duels, driver=driver)
+schedule.every(2).minutes.do(update_interface, driver=driver)
+schedule.every(3).minutes.do(send_log_updates, token=tg_bot_token, chat_id=tg_chat_id, topic_id=tg_topic_id)
 
 scheduler_thread = threading.Thread(target=run_scheduler)
 scheduler_thread.start()
