@@ -918,6 +918,26 @@ def close_main_popups(driver):
         pass
 
 
+def decline_duel(driver, max_attempts=3):
+    logger.debug('Attempting to decline duel')
+    for attempt in range(max_attempts):
+        # Click the decline button
+        decline_button = driver.find_element(By.XPATH, "//div[contains(@class, 'pointer-events-auto')]//button[contains(text(), 'Decline')]")
+        decline_button.click()
+
+        # Wait a short moment for the action to take effect
+        time.sleep(1.5)
+
+        # Check if the "Duel Request" text is still visible
+        try:
+            driver.find_element(By.XPATH, "//span[contains(text(), 'Duel Request')]")
+            logger.debug('Duel Request is still visible, attempting to decline again')
+        except:
+            logger.debug('Duel Request is no longer visible, duel declined successfully')
+            return True  # Duel declined successfully
+
+    logger.error('Max attempts to decline duel reached, duel may not be declined properly')
+
 def process_duel():
     logger.debug('Processing duel request')
     accept_button = driver.find_element(By.XPATH,
@@ -928,11 +948,23 @@ def process_duel():
 
     try:
         wait_duel_start.until(EC.element_to_be_clickable((By.CLASS_NAME, "duel-entry-scene")))
+        logger.debug('Duel started')
+        sleep(8)
+        # Continue processing as the duel has started
     except:
         logger.debug('Duel is not started yet, declining')
-        driver.find_element(By.XPATH,
-                            "//div[contains(@class, 'pointer-events-auto')]//button[contains(text(), 'Decline')]").click()
-        return
+        try:
+            decline_duel(driver)
+        except:
+            pass
+        sleep(2)
+        distance_to_arena, _, _ = get_distance_to_arena(driver)
+        if distance_to_arena > 900:
+            logger.debug('In duel after declining, processing duel')
+            sleep(6)
+        else:
+            logger.debug('Duel declined successfully, exiting function')
+            return  # Exit function as the duel is declined successfully
     # sleep(8)
     # try:
     #     driver.find_element(By.XPATH, "//span[contains(text(), 'Duel Request')]")
@@ -943,8 +975,6 @@ def process_duel():
     # except:
     #     pass
 
-    logger.debug('Duel started')
-    sleep(8)
 
     click_around(driver)
     sleep(2)
@@ -990,7 +1020,6 @@ def solve_captcha_if_required(driver):
         sleep(4)
         wait_long.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Reconnect')]"))).click()
         sleep(10)
-        clean_up_interface(driver)
 
 
 def close_duel_end_popup(driver):
@@ -1028,7 +1057,13 @@ def reload_page(driver):
     driver.find_element(By.XPATH, "//button[contains(text(), 'Enter World')]").click()
     sleep(6)
     solve_captcha_if_required(driver)
-    close_duel_end_popup(driver)
+    try:
+        wait.until(EC.element_to_be_clickable((By.XPATH, "//span[contains(text(), 'Blast Orb')]")))
+        driver.find_element(By.XPATH, "//img[@alt='Close modal']").click()
+    except:
+        pass
+    clean_up_interface(driver)
+    # close_duel_end_popup(driver)
 
 
 def reload_page_if_bugged(driver):
@@ -1059,7 +1094,9 @@ def get_distance_to_arena(driver):
     return distance_to_arena, x_position_on_map, y_position_on_map
 
 
-def recursive_step_to_arena(driver, step_size_from=0, step_size_to=570):
+def recursive_step_to_arena(driver, step_size_from=0, step_size_to=570, max_recursion_depth=4, current_depth=0):
+    if current_depth >= max_recursion_depth:
+        return
     distance_to_arena, x_position_on_map, y_position_on_map = get_distance_to_arena(driver)
 
     if distance_to_arena <= 350:
@@ -1105,7 +1142,7 @@ def recursive_step_to_arena(driver, step_size_from=0, step_size_to=570):
     except:
         pass
 
-    recursive_step_to_arena(driver)
+    recursive_step_to_arena(driver, current_depth=current_depth + 1)
 
 
 def clear_chat(driver):
@@ -1314,7 +1351,7 @@ complete_tutorial()
 # wait_long = WebDriverWait(driver, 60, 1)
 # wait_ultra_long = WebDriverWait(driver, 220, 1)
 # wait_tech_work_finish = WebDriverWait(driver, 180, 1)
-# wait_duel_start = WebDriverWait(driver, 16, 1)
+# wait_duel_start = WebDriverWait(driver, 12, 1)
 # driver.switch_to.window(driver.window_handles[0])
 # driver.maximize_window()
 # action = ActionChains(driver)
@@ -1385,7 +1422,7 @@ page_refresh_lock = threading.Lock()
 def run_scheduler():
     while True:
         schedule.run_pending()
-        time.sleep(10)
+        time.sleep(1)
 
 
 def incoming_requests_listener():
@@ -1427,7 +1464,7 @@ def update_interface(driver):
         close_secondary_popups(driver)
         clean_up_interface_regular(driver)
     except Exception as e:
-        print(f'Exception caught in update_interface: {e}')
+        logger.debug(f'Exception caught in update_interface: {e}')
         pass
 
 
@@ -1456,7 +1493,7 @@ def duel_opponent_search():
 # Set up your scheduled tasks
 schedule.every(60).minutes.do(reload_page, driver=driver)
 schedule.every(5).minutes.do(refresh_if_no_duels, driver=driver)
-schedule.every(2).minutes.do(update_interface, driver=driver)
+schedule.every(3).minutes.do(update_interface, driver=driver)
 schedule.every(10).minutes.do(send_log_updates, token=tg_bot_token, chat_id=tg_chat_id, topic_id=tg_topic_id)
 
 scheduler_thread = threading.Thread(target=run_scheduler)
