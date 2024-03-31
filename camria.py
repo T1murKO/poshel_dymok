@@ -945,7 +945,6 @@ def process_duel():
     logger.debug('Processing duel request')
     accept_button = driver.find_element(By.XPATH,
                                         "//div[contains(@class, 'pointer-events-auto')]//button[contains(text(), 'Accept')]")
-    sleep(0.5)
     accept_button.click()
     logger.debug('Duel accepted')
 
@@ -1451,14 +1450,14 @@ def duel_request_listener():
         try:
             with page_refresh_lock:
                 driver.find_element(By.XPATH, "//span[contains(text(), 'Duel Request')]")
-                logger.debug('Duel request accepted')
                 with duel_request_lock:
                     with incoming_request_lock:
+                        logger.debug('Duel request accepted')
                         process_duel()
         except:
             pass
         finally:
-            time.sleep(0.25)
+            time.sleep(0.1)
 
 
 def update_interface(driver):
@@ -1494,7 +1493,7 @@ def duel_opponent_search():
             print(f'Exception caught in duel_opponent_search: {e}')
             pass
         finally:
-            time.sleep(0.25)
+            time.sleep(0.35)
 
 
 # Set up your scheduled tasks
