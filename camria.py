@@ -1334,7 +1334,7 @@ metamask_auto.add_network('Blast', 'https://rpc.blast.io', '81457', 'ETH', 'http
 wait_fast = WebDriverWait(driver, 3, 1)
 wait = WebDriverWait(driver, 20, 1)
 wait_long = WebDriverWait(driver, 60, 1)
-wait_ultra_long = WebDriverWait(driver, 220, 1)
+wait_ultra_long = WebDriverWait(driver, 180, 1)
 wait_tech_work_finish = WebDriverWait(driver, 180, 1)
 wait_duel_start = WebDriverWait(driver, 16, 1)
 driver.switch_to.window(driver.window_handles[0])
@@ -1357,7 +1357,10 @@ try:
 except:
     pass
 wait_long.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Enter World')]"))).click()
-wait_ultra_long.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Reconnect')]")))
+try:
+    wait_ultra_long.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Reconnect')]"))).click()
+except:
+    pass
 solve_captcha_if_required(driver)
 complete_tutorial()
 
