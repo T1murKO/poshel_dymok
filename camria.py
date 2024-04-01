@@ -36,9 +36,11 @@ parser.add_argument("--api-key", type=str, required=True, help="API key to rucap
 parser.add_argument("--tg-bot-token", type=str, required=True, help="Telegram bot token")
 parser.add_argument("--tg-chat-id", type=str, required=True, help="Telegram chat it")
 parser.add_argument("--tg-topic-id", type=str, required=True, help="Telegram topic id")
+parser.add_argument("--server-load", type=int, default=5, required=False, help="Server load from 1 to 10")
+
 
 # Set defaults for the boolean arguments
-parser.set_defaults(save_image=False, debug=False, console_mode=False, passive=False)
+parser.set_defaults(save_image=False, debug=False, console_mode=False, passive=False, server_load=5)
 
 args = parser.parse_args()
 
@@ -49,6 +51,9 @@ api_key = args.api_key
 tg_bot_token = args.tg_bot_token
 tg_chat_id = args.tg_chat_id
 tg_topic_id = args.tg_topic_id
+server_load = args.server_load
+click_around_chance = server_load * 0.1
+distance_from_center_degree = np.linspace(1, 3.25, 10)[server_load - 1]
 
 user_agent = ('Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 '
               'Safari/537.36')
@@ -105,13 +110,35 @@ def send_log_updates(token, chat_id, topic_id):
 
 
 def refresh_if_no_duels(driver):
-    global last_duels, duels
+    global last_duels, duels, duels_search_exceptions, distance_to_arena_same_count
     if last_duels == duels:
         with page_refresh_lock:
             logger.debug('No duels found recently, refreshing page')
             reload_page(driver)
+            duels_search_exceptions = 0
+            distance_to_arena_same_count = 0
 
     last_duels = duels
+
+
+def refresh_if_bug(driver):
+    global duels_search_exceptions, distance_to_arena_same_count
+
+    if duels_search_exceptions > 20:
+        with page_refresh_lock:
+            logger.debug('Too many exceptions while searching for duels, refreshing page')
+            reload_page(driver)
+            duels_search_exceptions = 0
+            distance_to_arena_same_count = 0
+            return
+
+    if distance_to_arena_same_count > 20:
+        with page_refresh_lock:
+            logger.debug('Too many same distances to arena, refreshing page')
+            reload_page(driver)
+            duels_search_exceptions = 0
+            distance_to_arena_same_count = 0
+            return
 
 
 def send_stuck_alert(token, chat_id):
@@ -750,7 +777,7 @@ def request_duel(driver):
     y_cords = valid_rects[:, 1] + valid_rects[:, 3] // 2
 
     # Calculate distances to the center of the image
-    distances_to_center = np.linalg.norm(center_of_image - np.stack((x_cords, y_cords), axis=1), axis=1) ** 1.75
+    distances_to_center = np.linalg.norm(center_of_image - np.stack((x_cords, y_cords), axis=1), axis=1) ** distance_from_center_degree
 
     if distances_to_center.size > 1:
         if random.random() > 0.9:
@@ -787,7 +814,8 @@ def request_duel(driver):
         return x_coordinate, y_coordinate
     else:
         distance_to_arena, x_position_on_map, y_position_on_map = get_distance_to_arena(driver)
-        step_to_arena(driver, distance_to_arena, x_position_on_map, y_position_on_map, step_size_from=80, step_size_to=250)
+        step_to_arena(driver, distance_to_arena, x_position_on_map, y_position_on_map, step_size_from=80,
+                      step_size_to=250)
         sleep(1.5)
         return tab_center_x, tab_center_y
 
@@ -1087,13 +1115,13 @@ def reload_page_if_bugged(driver):
 def get_distance_to_arena(driver):
     x_position_on_map = int(driver.find_element(By.XPATH, "//span[contains(text(), 'X:')]").text[3:])
     y_position_on_map = int(driver.find_element(By.XPATH, "//span[contains(text(), 'Y:')]").text[3:])
-    distance_to_arena = np.linalg.norm([x_position_on_map - arena_position_x, y_position_on_map - arena_position_y],
-                                       ord=2)
+    distance_to_arena = round(
+        np.linalg.norm([x_position_on_map - arena_position_x, y_position_on_map - arena_position_y],
+                       ord=2), 2)
     return distance_to_arena, x_position_on_map, y_position_on_map
 
 
 def step_to_arena(driver, distance_to_arena, x_position_on_map, y_position_on_map, step_size_from=0, step_size_to=500):
-
     logger.debug(f'Distance to arena: {distance_to_arena}, moving')
 
     if random.random() > 0.9:
@@ -1192,7 +1220,7 @@ def remove_all_xpath_elements(driver, xpath):
 
 def remove_first_xpath_element(driver, xpath):
     script = f"""
-    var element = document.evaluate("{xpath}", document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+    var element = document.evaluate(`{xpath}`, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
     if (element) {{
       element.remove();
     }}
@@ -1200,6 +1228,18 @@ def remove_first_xpath_element(driver, xpath):
 
     # Execute the JavaScript with Selenium
     driver.execute_script(script)
+
+
+# def remove_first_xpath_element(driver, xpath):
+#     script = f"""
+#     var element = document.evaluate("{xpath}", document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+#     if (element) {{
+#       element.remove();
+#     }}
+#     """
+#
+#     # Execute the JavaScript with Selenium
+#     driver.execute_script(script)
 
 
 def complete_tutorial():
@@ -1271,6 +1311,7 @@ def clean_up_interface(driver):
 
 send_telegram_message_to_topic(tg_bot_token, tg_chat_id, f'=========== Bot started ===========', tg_topic_id)
 
+
 driver = Driver(extension_zip='./MetaMask.zip',
                 headless2=CONSOLE_MODE,
                 agent=user_agent,
@@ -1340,6 +1381,8 @@ complete_tutorial()
 #
 # chrome_driver, debugger_address = open_profile(46)
 # driver = _setup_driver(chrome_driver, debugger_address)
+# driver.switch_to.window(driver.window_handles[0])
+# driver.switch_to.default_content()
 # wait_fast = WebDriverWait(driver, 3, 1)
 # wait = WebDriverWait(driver, 20, 1)
 # wait_long = WebDriverWait(driver, 60, 1)
@@ -1396,10 +1439,12 @@ detection_kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (4, 6))
 lower_pixel_border = np.array([146, 134, 43])
 upper_pixel_border = np.array([235, 190, 90])
 
-global duels
-global last_duels
+global duels, last_duels, duels_search_exceptions, latest_distance_to_arena, distance_to_arena_same_count
 duels = 0
 last_duels = 0
+duels_search_exceptions = 0
+latest_distance_to_arena = 0
+distance_to_arena_same_count = 0
 
 send_telegram_message_to_topic(tg_bot_token, tg_chat_id, f'Setup finished', tg_topic_id)
 logger.info('Setup done, starting duels abuse')
@@ -1468,21 +1513,32 @@ def update_interface(driver):
 def duel_opponent_search():
     while True:
         try:
+            global duels_search_exceptions
             with page_refresh_lock:
                 distance_to_arena, x_position_on_map, y_position_on_map = get_distance_to_arena(driver)
                 x_coordinate, y_coordinate = request_duel(driver)
                 with duel_request_lock:
                     with incoming_request_lock:
                         close_main_popups(driver)
+                        global distance_to_arena_same_count, latest_distance_to_arena
+
+                        if distance_to_arena == latest_distance_to_arena:
+                            distance_to_arena_same_count += 1
+                        else:
+                            distance_to_arena_same_count = 0
+
+                        latest_distance_to_arena = distance_to_arena
+
                         if distance_to_arena > 350:
                             step_to_arena(driver, distance_to_arena, x_position_on_map, y_position_on_map)
                             continue
                         click_on_coordinates(driver, x_coordinate, y_coordinate)
                         sleep(1.75)
-
-                        click_around_character(driver, x_coordinate, y_coordinate)
-
+                        if random.random() > click_around_chance:
+                            click_around_character(driver, x_coordinate, y_coordinate)
+            duels_search_exceptions = 0
         except Exception as e:
+            duels_search_exceptions += 1
             print(f'Exception caught in duel_opponent_search: {e}')
             pass
         finally:
@@ -1491,6 +1547,7 @@ def duel_opponent_search():
 
 # Set up your scheduled tasks
 schedule.every(60).minutes.do(reload_page, driver=driver)
+schedule.every(2).minutes.do(refresh_if_bug, driver=driver)
 schedule.every(5).minutes.do(refresh_if_no_duels, driver=driver)
 schedule.every(2).minutes.do(update_interface, driver=driver)
 schedule.every(3).minutes.do(send_log_updates, token=tg_bot_token, chat_id=tg_chat_id, topic_id=tg_topic_id)
