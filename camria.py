@@ -1043,10 +1043,13 @@ def is_captcha_required(driver):
 def solve_captcha_if_required(driver):
     if is_captcha_required(driver):
         logger.debug('Captcha required, solving')
-        solve_capcha(driver)
-        sleep(4)
         wait_long.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Reconnect')]"))).click()
         sleep(10)
+        if is_captcha_required(driver):
+            solve_capcha(driver)
+            sleep(4)
+            wait_long.until(EC.element_to_be_clickable((By.XPATH, "//button[contains(text(), 'Reconnect')]"))).click()
+            sleep(10)
 
 
 def close_duel_end_popup(driver):
