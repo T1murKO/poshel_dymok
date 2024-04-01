@@ -19,6 +19,7 @@ import random
 import argparse
 import schedule
 import threading
+from selenium.common.exceptions import NoSuchElementException
 
 parser = argparse.ArgumentParser(description="Script Configuration")
 
@@ -86,12 +87,12 @@ scheduler_logger.setLevel(logging.WARNING)
 
 def send_log_updates(token, chat_id, topic_id):
     try:
-        global last_duels, duels
+        # global last_duels, duels
 
-        if last_duels == duels:
-            send_telegram_message_to_topic(token, chat_id, f'Bot {tg_topic_id} is stuck')
+        # if last_duels == duels:
+        #     send_telegram_message_to_topic(token, chat_id, f'Bot {tg_topic_id} is stuck')
 
-        last_duels = duels
+        # last_duels = duels
 
         with open(log_filename, 'r') as log_file:
             log_content = log_file.read()
@@ -106,8 +107,8 @@ def send_log_updates(token, chat_id, topic_id):
 def refresh_if_no_duels(driver):
     global last_duels, duels
     if last_duels == duels:
-        logger.debug('No duels found recently, refreshing page')
         with page_refresh_lock:
+            logger.debug('No duels found recently, refreshing page')
             reload_page(driver)
 
     last_duels = duels
@@ -727,7 +728,6 @@ def click_around(driver):
         pass
 
 
-# @time_tracker
 def request_duel(driver):
     logger.debug('Looking for duel opponent')
     img = cv2.cvtColor(cv2.imdecode(np.frombuffer(driver.get_screenshot_as_png(), np.uint8), cv2.IMREAD_COLOR),
@@ -752,7 +752,7 @@ def request_duel(driver):
     # Calculate distances to the center of the image
     distances_to_center = np.linalg.norm(center_of_image - np.stack((x_cords, y_cords), axis=1), axis=1) ** 1.75
 
-    if distances_to_center.size > 0:
+    if distances_to_center.size > 1:
         if random.random() > 0.9:
             selected_index = np.random.choice(distances_to_center.shape[0])
         else:
@@ -785,6 +785,11 @@ def request_duel(driver):
 
         # Perform the action based on selected coordinates
         return x_coordinate, y_coordinate
+    else:
+        distance_to_arena, x_position_on_map, y_position_on_map = get_distance_to_arena(driver)
+        step_to_arena(driver, distance_to_arena, x_position_on_map, y_position_on_map, step_size_from=80, step_size_to=250)
+        sleep(1.5)
+        return tab_center_x, tab_center_y
 
 
 # @time_tracker
@@ -923,7 +928,8 @@ def decline_duel(driver, max_attempts=4):
     for attempt in range(max_attempts):
         # Click the decline button
         try:
-            decline_button = driver.find_element(By.XPATH, "//div[contains(@class, 'pointer-events-auto')]//button[contains(text(), 'Decline')]")
+            decline_button = driver.find_element(By.XPATH,
+                                                 "//div[contains(@class, 'pointer-events-auto')]//button[contains(text(), 'Decline')]")
             decline_button.click()
 
             # Wait a short moment for the action to take effect
@@ -940,6 +946,7 @@ def decline_duel(driver, max_attempts=4):
             logger.error(f'Failed to decline duel attempt# {attempt}')
 
     logger.error('Max attempts to decline duel reached, duel may not be declined properly')
+
 
 def process_duel():
     logger.debug('Processing duel request')
@@ -967,16 +974,6 @@ def process_duel():
         else:
             logger.debug('Duel declined successfully, exiting function')
             return  # Exit function as the duel is declined successfully
-    # sleep(8)
-    # try:
-    #     driver.find_element(By.XPATH, "//span[contains(text(), 'Duel Request')]")
-    #     logger.debug('Duel is not started yet, declining')
-    #     driver.find_element(By.XPATH,
-    #                         "//div[contains(@class, 'pointer-events-auto')]//button[contains(text(), 'Decline')]").click()
-    #     return
-    # except:
-    #     pass
-
 
     click_around(driver)
     sleep(2)
@@ -1095,14 +1092,8 @@ def get_distance_to_arena(driver):
     return distance_to_arena, x_position_on_map, y_position_on_map
 
 
-def recursive_step_to_arena(driver, step_size_from=0, step_size_to=570, max_recursion_depth=3, current_depth=0):
-    distance_to_arena, x_position_on_map, y_position_on_map = get_distance_to_arena(driver)
+def step_to_arena(driver, distance_to_arena, x_position_on_map, y_position_on_map, step_size_from=0, step_size_to=500):
 
-    if current_depth >= max_recursion_depth:
-        return
-
-    if distance_to_arena <= 350:
-        return
     logger.debug(f'Distance to arena: {distance_to_arena}, moving')
 
     if random.random() > 0.9:
@@ -1124,27 +1115,29 @@ def recursive_step_to_arena(driver, step_size_from=0, step_size_to=570, max_recu
         click_on_coordinates(driver, x_step_coord, y_step_coord)
     except Exception as e:
         pass
+
+    sleep(3)
+
     try:
         driver.find_element(By.XPATH, "//div[contains(@class, 'profile-menu')]//button[contains(text(), 'X')]").click()
     except:
         pass
-    sleep(4)
 
-    try:
-        driver.find_element(By.XPATH, "//button[contains(text(), 'Accept')]").click()
-        sleep(2)
-    except:
-        pass
+    # try:
+    #     driver.find_element(By.XPATH, "//button[contains(text(), 'Accept')]").click()
+    #     sleep(2)
+    # except:
+    #     pass
 
-    try:
-        driver.find_element(By.XPATH, "//span[contains(text(), 'Duel Request')]")
-        logger.debug('Duel request accepted')
-        sleep(1.5)
-        return
-    except:
-        pass
+    # try:
+    #     driver.find_element(By.XPATH, "//span[contains(text(), 'Duel Request')]")
+    #     logger.debug('Duel request accepted')
+    #     sleep(1.5)
+    #     return
+    # except:
+    #     pass
 
-    recursive_step_to_arena(driver, current_depth=current_depth + 1)
+    # recursive_step_to_arena(driver, current_depth=current_depth + 1)
 
 
 def clear_chat(driver):
@@ -1277,7 +1270,6 @@ def clean_up_interface(driver):
 
 
 send_telegram_message_to_topic(tg_bot_token, tg_chat_id, f'=========== Bot started ===========', tg_topic_id)
-
 
 driver = Driver(extension_zip='./MetaMask.zip',
                 headless2=CONSOLE_MODE,
@@ -1430,15 +1422,15 @@ def run_scheduler():
 def incoming_requests_listener():
     while True:
         try:
+            incoming_duel_request = driver.find_element(By.XPATH,
+                                                        "//div[contains(@class, 'chat-container')]//button[contains(text(), 'Accept')]")
             with page_refresh_lock:
-                incoming_duel_request = driver.find_element(By.XPATH,
-                                                            "//div[contains(@class, 'chat-container')]//button[contains(text(), 'Accept')]")
-                logger.debug('Incoming duel request accepted')
                 with incoming_request_lock:
+                    logger.debug('Incoming duel request accepted')
                     incoming_duel_request.click()
                     sleep(3)
-                remove_first_xpath_element(driver,
-                                           "//div[contains(@class, 'chat-container')]//button[contains(text(), 'Accept')]")
+                    remove_first_xpath_element(driver,
+                                               "//div[contains(@class, 'chat-container')]//button[contains(text(), 'Accept')]")
         except:
             pass
         finally:
@@ -1448,13 +1440,16 @@ def incoming_requests_listener():
 def duel_request_listener():
     while True:
         try:
+            driver.find_element(By.XPATH, "//span[contains(text(), 'Duel Request')]")
             with page_refresh_lock:
-                driver.find_element(By.XPATH, "//span[contains(text(), 'Duel Request')]")
                 with duel_request_lock:
                     with incoming_request_lock:
                         logger.debug('Duel request accepted')
                         process_duel()
-        except:
+        except NoSuchElementException:
+            pass
+        except Exception as e:
+            logger.error(f'Exception caught in duel_request_listener: {e}')
             pass
         finally:
             time.sleep(0.1)
@@ -1474,20 +1469,18 @@ def duel_opponent_search():
     while True:
         try:
             with page_refresh_lock:
-                close_main_popups(driver)
-                recursive_step_to_arena(driver)
-                distance_to_arena, _, _ = get_distance_to_arena(driver)
-                if distance_to_arena > 350:
-                    continue
-
+                distance_to_arena, x_position_on_map, y_position_on_map = get_distance_to_arena(driver)
                 x_coordinate, y_coordinate = request_duel(driver)
                 with duel_request_lock:
                     with incoming_request_lock:
+                        close_main_popups(driver)
+                        if distance_to_arena > 350:
+                            step_to_arena(driver, distance_to_arena, x_position_on_map, y_position_on_map)
+                            continue
                         click_on_coordinates(driver, x_coordinate, y_coordinate)
                         sleep(1.75)
 
-                if random.random() > 0.6:
-                    click_around_character(driver, x_coordinate, y_coordinate)
+                        click_around_character(driver, x_coordinate, y_coordinate)
 
         except Exception as e:
             print(f'Exception caught in duel_opponent_search: {e}')
@@ -1498,7 +1491,7 @@ def duel_opponent_search():
 
 # Set up your scheduled tasks
 schedule.every(60).minutes.do(reload_page, driver=driver)
-schedule.every(6).minutes.do(refresh_if_no_duels, driver=driver)
+schedule.every(5).minutes.do(refresh_if_no_duels, driver=driver)
 schedule.every(2).minutes.do(update_interface, driver=driver)
 schedule.every(3).minutes.do(send_log_updates, token=tg_bot_token, chat_id=tg_chat_id, topic_id=tg_topic_id)
 
