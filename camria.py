@@ -38,7 +38,6 @@ parser.add_argument("--tg-chat-id", type=str, required=True, help="Telegram chat
 parser.add_argument("--tg-topic-id", type=str, required=True, help="Telegram topic id")
 parser.add_argument("--server-load", type=int, default=5, required=False, help="Server load from 1 to 10")
 
-
 # Set defaults for the boolean arguments
 parser.set_defaults(save_image=False, debug=False, console_mode=False, passive=False, server_load=5)
 
@@ -140,6 +139,11 @@ def refresh_if_bug(driver):
             distance_to_arena_same_count = 0
             return
 
+    if reload_page_if_bugged(driver):
+        duels_search_exceptions = 0
+        distance_to_arena_same_count = 0
+        return
+
 
 def send_stuck_alert(token, chat_id):
     if last_duels == duels:
@@ -190,7 +194,7 @@ def human_type(element, text, speed_from=0.01, speed_to=0.03):
         element.send_keys(char)
 
 
-def retry(attempts=3, delay=2):
+def method_retry(attempts=3, delay=2):
     """
     A decorator for retrying a class method if an exception is raised.
 
@@ -205,6 +209,26 @@ def retry(attempts=3, delay=2):
             for _ in range(attempts):
                 try:
                     return func(self, *args, **kwargs)
+                except Exception as e:
+                    print(f'Retry for {func.__name__}, due to: {e}')
+                    last_exception = e
+                    time.sleep(delay)
+            # After all attempts, re-raise the last exception
+            raise last_exception
+
+        return wrapper
+
+    return decorator
+
+
+def retry(attempts=3, delay=2):
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            last_exception = None
+            for _ in range(attempts):
+                try:
+                    return func(*args, **kwargs)
                 except Exception as e:
                     print(f'Retry for {func.__name__}, due to: {e}')
                     last_exception = e
@@ -456,7 +480,7 @@ class MetaMaskAuto:
         except Exception:
             pass
 
-    @retry()
+    @method_retry()
     @switch_page
     def add_network(self, network_name, rpc_url, chain_id, currency_symbol, block_explorer=None):
         """Add a custom network
@@ -529,7 +553,7 @@ class MetaMaskAuto:
             'block_explorer': block_explorer
         }
 
-    @retry()
+    @method_retry()
     @switch_page
     def switch_network(self, network_name):
         """Switch to a network
@@ -561,7 +585,7 @@ class MetaMaskAuto:
 
         logger.info('Change network success')
 
-    @retry()
+    @method_retry()
     @switch_page
     def add_account(self, private_key):
         """Import private key
@@ -598,7 +622,7 @@ class MetaMaskAuto:
 
         logger.info('Import PK success')
 
-    @retry()
+    @method_retry()
     @switch_page
     def connect(self):
         """Connect wallet
@@ -622,7 +646,7 @@ class MetaMaskAuto:
 
         logger.info('Connect wallet successfully')
 
-    @retry()
+    @method_retry()
     @switch_page
     def confirm(self):
         """Confirm wallet
@@ -777,7 +801,8 @@ def request_duel(driver):
     y_cords = valid_rects[:, 1] + valid_rects[:, 3] // 2
 
     # Calculate distances to the center of the image
-    distances_to_center = np.linalg.norm(center_of_image - np.stack((x_cords, y_cords), axis=1), axis=1) ** distance_from_center_degree
+    distances_to_center = np.linalg.norm(center_of_image - np.stack((x_cords, y_cords), axis=1),
+                                         axis=1) ** distance_from_center_degree
 
     if distances_to_center.size > 1:
         if random.random() > 0.9:
@@ -1110,9 +1135,11 @@ def reload_page_if_bugged(driver):
                     logger.debug('Page is bugged, reloading')
                     with page_refresh_lock:
                         reload_page(driver)
+                        return True
                 break  # Stop checking after finding the first visible bug text
+        return False
     except:
-        pass
+        return False
 
 
 def get_distance_to_arena(driver):
@@ -1314,7 +1341,6 @@ def clean_up_interface(driver):
 
 send_telegram_message_to_topic(tg_bot_token, tg_chat_id, f'=========== Bot started ===========', tg_topic_id)
 
-
 driver = Driver(extension_zip='./MetaMask.zip',
                 headless2=CONSOLE_MODE,
                 agent=user_agent,
@@ -1464,12 +1490,6 @@ duel_request_lock = threading.Lock()
 page_refresh_lock = threading.Lock()
 
 
-def run_scheduler():
-    while True:
-        schedule.run_pending()
-        time.sleep(1)
-
-
 def incoming_requests_listener():
     while True:
         try:
@@ -1551,7 +1571,13 @@ def duel_opponent_search():
             time.sleep(0.35)
 
 
-# Set up your scheduled tasks
+def run_scheduler():
+    while True:
+        schedule.run_pending()
+        time.sleep(1)
+
+
+# todo: add reschedule of reload_page after some reload already done
 schedule.every(60).minutes.do(reload_page, driver=driver)
 schedule.every(2).minutes.do(refresh_if_bug, driver=driver)
 schedule.every(5).minutes.do(refresh_if_no_duels, driver=driver)
