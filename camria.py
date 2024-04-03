@@ -1581,7 +1581,7 @@ def run_scheduler():
 schedule.every(60).minutes.do(reload_page, driver=driver)
 schedule.every(2).minutes.do(refresh_if_bug, driver=driver)
 schedule.every(5).minutes.do(refresh_if_no_duels, driver=driver)
-schedule.every(2).minutes.do(update_interface, driver=driver)
+schedule.every(1).minutes.do(update_interface, driver=driver)
 schedule.every(3).minutes.do(send_log_updates, token=tg_bot_token, chat_id=tg_chat_id, topic_id=tg_topic_id)
 
 scheduler_thread = threading.Thread(target=run_scheduler)
